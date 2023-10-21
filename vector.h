@@ -63,7 +63,8 @@
                             NOT_UNIQUE = -4,              // the key is not unique
                             DATA_CHANGED = -5,            // unexpected data value found
                             FILE_IO_ERROR = -6,           // file operation error
-                            NOT_WHILE_ITERATING = -7      // operation can not be berformed while iterating
+                            NOT_WHILE_ITERATING = -7,     // operation can not be berformed while iterating
+                            DATA_ALREADY_LOADED = -8      // can't load the data if it is already loaded 
             }; // note that all errors are negative numbers
 
             char *errorCodeText (errorCode e) {
@@ -76,10 +77,11 @@
                     case DATA_CHANGED:        return (char *) "DATA_CHANGED";
                     case FILE_IO_ERROR:       return (char *) "FILE_IO_ERROR";
                     case NOT_WHILE_ITERATING: return (char *) "NOT_WHILE_ITERATING";
+                    case DATA_ALREADY_LOADED: return (char *) "DATA_ALREADY_LOADED";
                 }
                 return NULL; // doesn't happen
             }
-
+            
             errorCode lastErrorCode = OK;
 
             void clearLastErrorCode () { lastErrorCode = OK; }
@@ -718,7 +720,8 @@
                             NOT_UNIQUE = -4,              // the key is not unique
                             DATA_CHANGED = -5,            // unexpected data value found
                             FILE_IO_ERROR = -6,           // file operation error
-                            NOT_WHILE_ITERATING = -7      // operation can not be berformed while iterating
+                            NOT_WHILE_ITERATING = -7,     // operation can not be berformed while iterating
+                            DATA_ALREADY_LOADED = -8      // can't load the data if it is already loaded 
             }; // note that all errors are negative numbers
 
             char *errorCodeText (errorCode e) {
@@ -731,10 +734,11 @@
                     case DATA_CHANGED:        return (char *) "DATA_CHANGED";
                     case FILE_IO_ERROR:       return (char *) "FILE_IO_ERROR";
                     case NOT_WHILE_ITERATING: return (char *) "NOT_WHILE_ITERATING";
+                    case DATA_ALREADY_LOADED: return (char *) "DATA_ALREADY_LOADED";
                 }
                 return NULL; // doesn't happen
             }
-
+            
             errorCode lastErrorCode = OK;
 
             void clearLastErrorCode () { lastErrorCode = OK; }

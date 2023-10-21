@@ -1,7 +1,7 @@
 /*
  * persistentKeyValuePairs.h for Arduino ESP boards
  * 
- * This file is part of Persistent-key-value-pairs-for-Arduino: https://github.com/BojanJurca/Cplusplus-persistent-key-value-pairs-for-Arduino
+ * This file is part of Persistent-key-value-pairs-for-Arduino: https://github.com/BojanJurca/Arduino-Esp32-key-value-database
  *
  * Persistent key-value pairs may be used as a simple database with the following functions (see examples in BasicUsage.ino):
  *
@@ -44,7 +44,7 @@
  *            - data file offset (uint16_t) of a free block
  *            - size of a free block (int16_t)
  * 
- * Bojan Jurca, October 10, 2023
+ * Bojan Jurca, October 23, 2023
  *  
  */
 
@@ -84,7 +84,8 @@
                             NOT_UNIQUE = -4,              // the key is not unique
                             DATA_CHANGED = -5,            // unexpected data value found
                             FILE_IO_ERROR = -6,           // file operation error
-                            NOT_WHILE_ITERATING = -7      // operation can not be berformed while iterating
+                            NOT_WHILE_ITERATING = -7,     // operation can not be berformed while iterating
+                            DATA_ALREADY_LOADED = -8      // can't load the data if it is already loaded 
             }; // note that all errors are negative numbers
 
             char *errorCodeText (errorCode e) {
@@ -97,6 +98,7 @@
                     case DATA_CHANGED:        return (char *) "DATA_CHANGED";
                     case FILE_IO_ERROR:       return (char *) "FILE_IO_ERROR";
                     case NOT_WHILE_ITERATING: return (char *) "NOT_WHILE_ITERATING";
+                    case DATA_ALREADY_LOADED: return (char *) "DATA_ALREADY_LOADED";
                 }
                 return NULL; // doesn't happen
             }
@@ -121,7 +123,7 @@
             *          ...
             */
             
-            persistentKeyValuePairs () { return; }
+            persistentKeyValuePairs () {}
 
            /*
             *  Constructor of persistentKeyValuePairs that also loads the data from data file: 
@@ -149,20 +151,18 @@
 
             errorCode loadData (const char *dataFileName) {
                 xSemaphoreTakeRecursive (__semaphore__, portMAX_DELAY); // don't allow other tasks to change keyValuePairs structure or write to __dataFile__ meanwhile
-
-                // clear existing data
-
-                if (__dataFile__)
-                    __dataFile__.close ();
-
-                keyValuePairs<keyType, uint32_t>::clear ();
-                __freeBlocksList__.clear ();
+                if (__dataFile__) {
+                    __persistent_key_value_pairs_h_debug__ ("load: data already loaded.");
+                    xSemaphoreGiveRecursive (__semaphore__);
+                    return DATA_ALREADY_LOADED;
+                }
 
                 // load new data
 
                 strcpy (__dataFileName__, dataFileName);
 
                 if (!fileSystem.isFile (dataFileName)) {
+                    __persistent_key_value_pairs_h_debug__ ("load: creating empty data file.");
                     __dataFile__ = fileSystem.open (dataFileName, "w", true);
                     if (__dataFile__) {
                           __dataFile__.close (); 
@@ -174,14 +174,15 @@
                 }
 
                 __dataFile__ = fileSystem.open (dataFileName, "r+", false);
+                __persistent_key_value_pairs_h_debug__ ("load: opened data file, size at load = " + String (__dataFile__.size ()));
                 if (!__dataFile__) {
                     lastErrorCode = FILE_IO_ERROR;
                     __persistent_key_value_pairs_h_debug__ ("load: failed opening the data file.");
                     xSemaphoreGiveRecursive (__semaphore__);
-                    { lastErrorCode = FILE_IO_ERROR; return FILE_IO_ERROR; }                    
+                    { lastErrorCode = FILE_IO_ERROR; return FILE_IO_ERROR; }
                 }
 
-                __dataFileSize__ = __dataFile__.size (); 
+                __dataFileSize__ = __dataFile__.size ();
                 uint64_t blockOffset = 0;
 
                 while (blockOffset < __dataFileSize__ &&  blockOffset <= 0xFFFFFFFF) { // max uint32_t
@@ -191,15 +192,17 @@
 
                     if (!__readBlock__ (blockSize, key, value, (uint32_t) blockOffset, true)) {
                         __persistent_key_value_pairs_h_debug__ ("load: __readBlock__ failed.");
+                        __dataFile__.close ();
                         xSemaphoreGiveRecursive (__semaphore__);
                         { lastErrorCode = FILE_IO_ERROR; return FILE_IO_ERROR; }                         
                     }
                     if (blockSize > 0) { // block containining the data -> insert into keyValuePairs
                         __persistent_key_value_pairs_h_debug__ ("constructor: blockOffset: " + String (blockOffset));
                         __persistent_key_value_pairs_h_debug__ ("constructor: used blockSize: " + String (blockSize));
-                        __persistent_key_value_pairs_h_debug__ ("constructor: used key-value: " + String (key) + "-" + String (value));
+                        // __persistent_key_value_pairs_h_debug__ ("constructor: used key-value: " + String (key) + "-" + String (value));
                         if (keyValuePairs<keyType, uint32_t>::insert (key, (uint32_t) blockOffset) != keyValuePairs<keyType, uint32_t>::OK) {
                             __persistent_key_value_pairs_h_debug__ ("load: insert failed, error " + String (keyValuePairs<keyType, uint32_t>::lastErrorCode));
+                            __dataFile__.close ();
                             errorCode e = lastErrorCode = (errorCode) keyValuePairs<keyType, uint32_t>::lastErrorCode;
                             xSemaphoreGiveRecursive (__semaphore__);
                             return e;
@@ -210,6 +213,7 @@
                         blockSize = (int16_t) -blockSize;
                         if (__freeBlocksList__.push_back ( {(uint32_t) blockOffset, blockSize} ) != __freeBlocksList__.OK) {
                             __persistent_key_value_pairs_h_debug__ ("load: push_back failed.");
+                            __dataFile__.close ();
                             errorCode e = lastErrorCode = (errorCode) __freeBlocksList__.lastErrorCode;
                             xSemaphoreGiveRecursive (__semaphore__);
                             return e;
@@ -221,6 +225,16 @@
 
                 xSemaphoreGiveRecursive (__semaphore__);
                 return OK;
+            }
+
+
+           /*
+            *  Returns true if the data has already been successfully loaded from data file.
+            *  
+            */
+
+            bool dataLoaded () {
+                return __dataFile__;
             }
 
 
@@ -244,12 +258,12 @@
                 }
 
                 if (std::is_same<keyType, String>::value)                                                                     // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                    if (!key) {                                                                                               // ... check if parameter construction is valid
+                    if (!(String *) &key) {                                                                                               // ... check if parameter construction is valid
                         __persistent_key_value_pairs_h_debug__ ("Insert: key constructor failed.");
                         { lastErrorCode = BAD_ALLOC; return BAD_ALLOC; }                                                      // report error if it is not
                     }
                 if (std::is_same<valueType, String>::value)                                                                   // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                    if (!value) {                                                                                             // ... check if parameter construction is valid
+                    if (!(String *) &value) {                                                                                 // ... check if parameter construction is valid
                         __persistent_key_value_pairs_h_debug__ ("Insert: value constructor failed.");
                         { lastErrorCode = BAD_ALLOC; return BAD_ALLOC; }                                                      // report error if it is not
                     }
@@ -344,6 +358,7 @@
 
                 // 6. write block to __dataFile__
                 if (__dataFile__.write (block, blockSize) != blockSize) {
+                    __dataFile__.flush ();
                     __persistent_key_value_pairs_h_debug__ ("Insert: write failed (6).");
                     free (block);
 
@@ -351,6 +366,7 @@
                     if (__dataFile__.seek (blockOffset, SeekSet)) {
                         blockSize = (int16_t) -blockSize;
                         if (__dataFile__.write ((byte *) &blockSize, sizeof (blockSize)) != sizeof (blockSize)) { // can't roll-back
+                            // __dataFile__.flush ();
                             __dataFile__.close (); // memory key value pairs and disk data file are synchronized any more - it is better to clost he file, this would cause all disk related operations from now on to fail
                         }
                     } else { // can't roll-back
@@ -383,7 +399,7 @@
 
             errorCode FindBlockOffset (keyType key, uint32_t& blockOffset) {
                 if (std::is_same<keyType, String>::value)                                                                     // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                    if (!key) {                                                                                               // ... check if parameter construction is valid
+                    if (!(String *) &key) {                                                                                   // ... check if parameter construction is valid
                         __persistent_key_value_pairs_h_debug__ ("FindBlockOffset: key constructor failed.");
                         { lastErrorCode = BAD_ALLOC; return BAD_ALLOC; }
                     }
@@ -420,7 +436,7 @@
                 keyType storedKey = {};
 
                 if (std::is_same<keyType, String>::value)                                                                     // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                    if (!key) {                                                                                               // ... check if parameter construction is valid
+                    if (!(String *) &key) {                                                                                   // ... check if parameter construction is valid
                         __persistent_key_value_pairs_h_debug__ ("FindValue: key constructor failed.");
                         { lastErrorCode = BAD_ALLOC; return BAD_ALLOC; }
                     }
@@ -472,12 +488,12 @@
                 if (!__dataFile__) { lastErrorCode = FILE_IO_ERROR; return FILE_IO_ERROR; }
 
                 if (std::is_same<keyType, String>::value)                                                                     // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                    if (!key) {                                                                                               // ... check if parameter construction is valid
+                    if (!(String *) &key) {                                                                                   // ... check if parameter construction is valid
                         __persistent_key_value_pairs_h_debug__ ("Update: key constructor failed.");
                         { lastErrorCode = BAD_ALLOC; return BAD_ALLOC; }
                     }
                 if (std::is_same<valueType, String>::value)                                                                   // if value is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                    if (!newValue) {                                                                                          // ... check if parameter construction is valid
+                    if (!(String *) &newValue) {                                                                              // ... check if parameter construction is valid
                         __persistent_key_value_pairs_h_debug__ ("Update: value constructor failed.");
                         { lastErrorCode = BAD_ALLOC; return BAD_ALLOC; }
                     }
@@ -560,9 +576,11 @@
                     if (std::is_same<valueType, String>::value) { // if value is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
                         bytesToWrite = (((String *) &newValue)->length () + 1);
                         bytesWritten = __dataFile__.write ((byte *) ((String *) &newValue)->c_str () , bytesToWrite);
+                        __dataFile__.flush ();
                     } else {
                         bytesToWrite = sizeof (newValue);
                         bytesWritten = __dataFile__.write ((byte *) &newValue , bytesToWrite);
+                        __dataFile__.flush ();
                     }
                     if (bytesWritten != bytesToWrite) { // file IO error, it is highly unlikely that rolling-back to the old value would succeed
                         __dataFile__.close (); // memory key value pairs and disk data file are synchronized any more - it is better to clost he file, this would cause all disk related operations from now on to fail
@@ -634,6 +652,7 @@
                         if (__dataFile__.seek (newBlockOffset, SeekSet)) {
                             newBlockSize = (int16_t) -newBlockSize;
                             if (__dataFile__.write ((byte *) &newBlockSize, sizeof (newBlockSize)) != sizeof (newBlockSize)) { // can't roll-back
+                                // __dataFile__.flush ();
                                 __dataFile__.close (); // memory key value pairs and disk data file are synchronized any more - it is better to clost he file, this would cause all disk related operations from now on to fail
                             }
                         } else { // can't roll-back
@@ -643,6 +662,7 @@
                         { lastErrorCode = FILE_IO_ERROR; return FILE_IO_ERROR; }
                     }
                     free (block);
+                    __dataFile__.flush ();
 
                     // 11. roll-out
                     if (freeBlockIndex == -1) { // data appended to the end of __dataFile__
@@ -659,6 +679,7 @@
                     }
                     blockSize = (int16_t) -blockSize;
                     if (__dataFile__.write ((byte *) &blockSize, sizeof (blockSize)) != sizeof (blockSize)) {
+                        // __dataFile__.flush ();
                         __persistent_key_value_pairs_h_debug__ ("Update: write failed (12).");
                         __dataFile__.close (); // data file is corrupt (it contains two entries with the same key) and it si not likely we can roll it back
                         xSemaphoreGiveRecursive (__semaphore__);
@@ -689,7 +710,7 @@
                 if (!__dataFile__) { lastErrorCode = FILE_IO_ERROR; return FILE_IO_ERROR; }
 
                 if (std::is_same<keyType, String>::value)                                                                     // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                    if (!key) {                                                                                               // ... check if parameter construction is valid
+                    if (!(String *) &key) {                                                                                   // ... check if parameter construction is valid
                         __persistent_key_value_pairs_h_debug__ ("Delete: key constructor failed.");
                         { lastErrorCode = BAD_ALLOC; return BAD_ALLOC; }
                     }
@@ -748,6 +769,7 @@
                     { lastErrorCode = FILE_IO_ERROR; return FILE_IO_ERROR; }
                 }
                 if (__dataFile__.write ((byte *) &blockSize, sizeof (blockSize)) != sizeof (blockSize)) {
+                    __dataFile__.flush ();
                     __persistent_key_value_pairs_h_debug__ ("Delete: write failed (4).");
                      // 5. (try to) roll-back
                     if (keyValuePairs<keyType, uint32_t>::insert (key, (uint32_t) blockOffset) != keyValuePairs<keyType, uint32_t>::OK) {

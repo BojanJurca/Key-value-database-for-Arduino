@@ -48,7 +48,8 @@
                           NOT_UNIQUE = -4,              // the key is not unique
                           DATA_CHANGED = -5,            // unexpected data value found
                           FILE_IO_ERROR = -6,           // file operation error
-                          NOT_WHILE_ITERATING = -7      // operation can not be berformed while iterating
+                          NOT_WHILE_ITERATING = -7,     // operation can not be berformed while iterating
+                          DATA_ALREADY_LOADED = -8      // can't load the data if it is already loaded 
           }; // note that all errors are negative numbers
 
           char *errorCodeText (errorCode e) {
@@ -61,6 +62,7 @@
                   case DATA_CHANGED:        return (char *) "DATA_CHANGED";
                   case FILE_IO_ERROR:       return (char *) "FILE_IO_ERROR";
                   case NOT_WHILE_ITERATING: return (char *) "NOT_WHILE_ITERATING";
+                  case DATA_ALREADY_LOADED: return (char *) "DATA_ALREADY_LOADED";
               }
               return NULL; // doesn't happen
           }
@@ -214,7 +216,7 @@
           valueType *find (keyType key) {
 
               if (std::is_same<keyType, String>::value)   // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                  if (!key) {                             // ... check if parameter construction is valid
+                  if (!(String *) &key) {                 // ... check if parameter construction is valid
                       lastErrorCode = BAD_ALLOC;          // report error if it is not
                       return NULL;
                   }
@@ -232,7 +234,7 @@
           errorCode erase (keyType key) { 
 
               if (std::is_same<keyType, String>::value)   // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                  if (!key) {                             // ... check if parameter construction is valid
+                  if (!(String *) &key) {                 // ... check if parameter construction is valid
                       return BAD_ALLOC;                   // report error if it is not
                   }
 
@@ -276,7 +278,7 @@
                   if (!key)                               // ... check if parameter construction is valid
                       return lastErrorCode = BAD_ALLOC;   // report error if it is not
               if (std::is_same<valueType, String>::value) // if value is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                  if (!value)                             // ... check if parameter construction is valid
+                  if (!(String *) &value)                 // ... check if parameter construction is valid
                       return lastErrorCode = BAD_ALLOC;   // report error if it is not
 
               int h = __insert__ (&__root__, key, value); 

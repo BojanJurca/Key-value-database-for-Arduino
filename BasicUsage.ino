@@ -1,8 +1,7 @@
 #include <WiFi.h>
 
-#define FILE_SYSTEM    FILE_SYSTEM_FAT 
+#define FILE_SYSTEM FILE_SYSTEM_FAT // or FILE_SYSTEM_LITTLEFS
 #include "fileSystem.hpp"
-
 
 #include "persistentKeyValuePairs.h"
 
@@ -13,12 +12,12 @@ void setup () {
     Serial.begin (115200);
 
     // fileSystem.formatFAT (); Serial.printf ("\nFormatting FAT file system ...\n\n"); // format flash disk to reset everithing and start from the scratch
-    fileSystem.mountFAT (true);    
+    fileSystem.mountFAT (true); // or fileSystem.mountLittleFs (true); // or 
 
     // create directory for data files
     if (!fileSystem.isDirectory ("/var/persistentKeyValuePairs")) { fileSystem.makeDirectory ("/var"); fileSystem.makeDirectory ("/var/persistentKeyValuePairs"); }
 
-    // index values in the data file (load keys into balanced binary search tree)
+    // index values in the data file (load keys to balanced binary search tree)
     pkvpA.loadData ("/var/persistentKeyValuePairs/A.kvp");
     if (pkvpA.lastErrorCode != pkvpA.OK) 
         Serial.printf ("pkvpA failed to load data: %s, all the data may not be indexed\n", pkvpA.errorCodeText (pkvpA.lastErrorCode));
