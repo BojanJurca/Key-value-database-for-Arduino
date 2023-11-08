@@ -5,22 +5,24 @@
  *
  * Persistent key-value pairs may be used as a simple database with the following functions (see examples in BasicUsage.ino):
  *
- *    - Insert (key, value)                             - inserts a new key-value pair
+ *    - Insert (key, value)                                   - inserts a new key-value pair
  *
- *    - FindBlockOffset (key)                           - searches (memory) keyValuePairs for key
- *    - FindValue (key, optional block offset)          - searches (memory) keyValuePairs for blockOffset connected to key and then it reads the value from (disk) data file 
- *                                                        (it works slightly faster if block offset is already known, such as during iterations)
+ *    - FindBlockOffset (key)                                 - searches (memory) keyValuePairs for key
+ *    - FindValue (key, optional block offset)                - searches (memory) keyValuePairs for blockOffset connected to key and then it reads the value from (disk) data file (it works slightly faster if block offset is already known, such as during iterations)
  *
- *    - Update (key, new value, optional block offset)  - updates the value associated by the key
- *                                                        (it works slightly faster if block offset is already known, such as during iterations)
+ *    - Update (key, new value, optional block offset)        - updates the value associated by the key (it works slightly faster if block offset is already known, such as during iterations)
+ *    - Update (key, callback function, optional blockoffset) - if the calculation is made with existing value then this is prefered method, since calculation is performed while database is being loceks
  *
- *    - Delete (key)                                    - deletes key-value pair identified by the key
- *    - Truncate                                        - deletes all key-value pairs
+ *    - Upsert (key, new value)                               - update the value if the key already exists, else insert a new one
+ *    - Update (key, callback function, default value)        - if the calculation is made with existing value then this is prefered method, since calculation is performed while database is being loceks
  *
- *    - Iterate                                         - iterate (list) through all the keys and their blockOffsets with an Iterator
+ *    - Delete (key)                                          - deletes key-value pair identified by the key
+ *    - Truncate                                              - deletes all key-value pairs
  *
- *    - Lock                                            - locks (takes the semaphor) to (temporary) prevent other taska accessing persistentKeyValuePairs
- *    - Unlock                                          - frees the lock
+ *    - Iterate                                               - iterate (list) through all the keys and their blockOffsets with an Iterator
+ *
+ *    - Lock                                                  - locks (takes the semaphore) to (temporary) prevent other taska accessing persistentKeyValuePairs
+ *    - Unlock                                                - frees the lock
  *
  * Data storage structure used for persistentKeyValuePairs:
  *
@@ -142,8 +144,10 @@
             }
 
             ~persistentKeyValuePairs () { 
-                if (__dataFile__)
+                if (__dataFile__) {
                     __dataFile__.close ();
+                    __persistent_key_value_pairs_h_debug__ ("DATA FILE CLOSED: " + String (__dataFileName__));
+                }
             } 
 
 
@@ -153,6 +157,7 @@
             */
 
             errorCode loadData (const char *dataFileName) {
+              __persistent_key_value_pairs_h_debug__ ("LOADDATA (" + String (dataFileName) + ")");
                 Lock (); // xSemaphoreTakeRecursive (__semaphore__, portMAX_DELAY); // don't allow other tasks to change keyValuePairs structure or write to __dataFile__ meanwhile
                 if (__dataFile__) {
                     __persistent_key_value_pairs_h_debug__ ("load: data already loaded.");
@@ -165,22 +170,22 @@
                 strcpy (__dataFileName__, dataFileName);
 
                 if (!fileSystem.isFile (dataFileName)) {
-                    __persistent_key_value_pairs_h_debug__ ("load: creating empty data file.");
+                    __persistent_key_value_pairs_h_debug__ ("loadData: creating empty data file.");
                     __dataFile__ = fileSystem.open (dataFileName, "w", true);
                     if (__dataFile__) {
                           __dataFile__.close (); 
                     } else {
-                        __persistent_key_value_pairs_h_debug__ ("load: failed creating the empty data file.");
+                        __persistent_key_value_pairs_h_debug__ ("loadData: failed creating the empty data file.");
                         Unlock (); // xSemaphoreGiveRecursive (__semaphore__);
                         { lastErrorCode = FILE_IO_ERROR; return FILE_IO_ERROR; }
                     }
                 }
 
                 __dataFile__ = fileSystem.open (dataFileName, "r+", false);
-                __persistent_key_value_pairs_h_debug__ ("load: opened data file, size at load = " + String (__dataFile__.size ()));
+                __persistent_key_value_pairs_h_debug__ ("loadData: opened data file, size at load = " + String (__dataFile__.size ()));
                 if (!__dataFile__) {
                     lastErrorCode = FILE_IO_ERROR;
-                    __persistent_key_value_pairs_h_debug__ ("load: failed opening the data file.");
+                    __persistent_key_value_pairs_h_debug__ ("loadData: failed opening the data file.");
                     Unlock (); // xSemaphoreGiveRecursive (__semaphore__);
                     { lastErrorCode = FILE_IO_ERROR; return FILE_IO_ERROR; }
                 }
@@ -194,7 +199,7 @@
                     valueType value;
 
                     if (!__readBlock__ (blockSize, key, value, (uint32_t) blockOffset, true)) {
-                        __persistent_key_value_pairs_h_debug__ ("load: __readBlock__ failed.");
+                        __persistent_key_value_pairs_h_debug__ ("loadData: __readBlock__ failed.");
                         __dataFile__.close ();
                         Unlock (); // xSemaphoreGiveRecursive (__semaphore__);
                         { lastErrorCode = FILE_IO_ERROR; return FILE_IO_ERROR; }                         
@@ -202,7 +207,6 @@
                     if (blockSize > 0) { // block containining the data -> insert into keyValuePairs
                         __persistent_key_value_pairs_h_debug__ ("constructor: blockOffset: " + String (blockOffset));
                         __persistent_key_value_pairs_h_debug__ ("constructor: used blockSize: " + String (blockSize));
-                        // __persistent_key_value_pairs_h_debug__ ("constructor: used key-value: " + String (key) + "-" + String (value));
                         if (keyValuePairs<keyType, uint32_t>::insert (key, (uint32_t) blockOffset) != keyValuePairs<keyType, uint32_t>::OK) {
                             __persistent_key_value_pairs_h_debug__ ("load: insert failed, error " + String (keyValuePairs<keyType, uint32_t>::lastErrorCode));
                             __dataFile__.close ();
@@ -211,11 +215,11 @@
                             return e;
                         }
                     } else { // free block -> insert into __freeBlockList__
-                        __persistent_key_value_pairs_h_debug__ ("load: blockOffset: " + String (blockOffset));
-                        __persistent_key_value_pairs_h_debug__ ("load: free blockSize: " + String (-blockSize));
+                        __persistent_key_value_pairs_h_debug__ ("loadData: blockOffset: " + String (blockOffset));
+                        __persistent_key_value_pairs_h_debug__ ("loadData: free blockSize: " + String (-blockSize));
                         blockSize = (int16_t) -blockSize;
                         if (__freeBlocksList__.push_back ( {(uint32_t) blockOffset, blockSize} ) != __freeBlocksList__.OK) {
-                            __persistent_key_value_pairs_h_debug__ ("load: push_back failed.");
+                            __persistent_key_value_pairs_h_debug__ ("loadData: push_back failed.");
                             __dataFile__.close ();
                             errorCode e = lastErrorCode = (errorCode) __freeBlocksList__.lastErrorCode;
                             Unlock (); // xSemaphoreGiveRecursive (__semaphore__);
@@ -253,7 +257,7 @@
             */
 
             errorCode Insert (keyType key, valueType value) {
-
+                __persistent_key_value_pairs_h_debug__ ("INSERT (... , ...)");
                 if (!__dataFile__) { 
                     __persistent_key_value_pairs_h_debug__ ("Insert: __dataFile__ not opened.");
                     lastErrorCode = FILE_IO_ERROR; 
@@ -279,6 +283,7 @@
                 }
 
                 // 1. get ready for writting into __dataFile__
+                __persistent_key_value_pairs_h_debug__ ("INSERT: step 1 - calculate block size");
                 size_t dataSize = sizeof (int16_t); // block size information
                 size_t blockSize = dataSize;
                 if (std::is_same<keyType, String>::value) { // if value is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
@@ -300,8 +305,10 @@
                     Unlock (); // xSemaphoreGiveRecursive (__semaphore__);
                     { lastErrorCode = BAD_ALLOC; return BAD_ALLOC; }      
                 }
+                __persistent_key_value_pairs_h_debug__ ("INSERT: step 1 - block size = " + String (blockSize) + " dataSize = " + String (dataSize));
 
                 // 2. search __freeBlocksList__ for most suitable free block, if it exists
+                __persistent_key_value_pairs_h_debug__ ("INSERT: step 2 - search for a free block if it exists");
                 int freeBlockIndex = -1;
                 uint32_t minWaste = 0xFFFFFFFF;
                 for (int i = 0; i < __freeBlocksList__.size (); i ++) {
@@ -310,8 +317,10 @@
                         minWaste = __freeBlocksList__ [i].blockSize - dataSize;
                     }
                 }
+                __persistent_key_value_pairs_h_debug__ ("INSERT: step 2 - free block = " + String (freeBlockIndex));
 
                 // 3. reposition __dataFile__ pointer
+                __persistent_key_value_pairs_h_debug__ ("INSERT: step 3 - reposition data file pointer");
                 uint32_t blockOffset;                
                 if (freeBlockIndex == -1) { // append data to the end of __dataFile__
                     __persistent_key_value_pairs_h_debug__ ("Insert: appending data to the end of data file, blockOffst: " + String (blockOffset));
@@ -328,6 +337,7 @@
                 }
 
                 // 4. update (memory) keyValuePairs structure 
+                __persistent_key_value_pairs_h_debug__ ("INSERT: step 4 - update key-value pairs");
                 if (keyValuePairs<keyType, uint32_t>::insert (key, blockOffset) != keyValuePairs<keyType, uint32_t>::OK) {
                     __persistent_key_value_pairs_h_debug__ ("Insert: insert failed (4).");
                     errorCode e = lastErrorCode = (errorCode) keyValuePairs<keyType, uint32_t>::lastErrorCode;
@@ -336,6 +346,7 @@
                 }
 
                 // 5. construct the block to be written
+                __persistent_key_value_pairs_h_debug__ ("INSERT: step 5 - construct the block");
                 byte *block = (byte *) malloc (blockSize);
                 if (!block) {
                     __persistent_key_value_pairs_h_debug__ ("Insert: malloc failed (5).");
@@ -360,16 +371,16 @@
                 }
 
                 // 6. write block to __dataFile__
+                __persistent_key_value_pairs_h_debug__ ("INSERT: step 6 - write the block to data file");
                 if (__dataFile__.write (block, blockSize) != blockSize) {
-                    __dataFile__.flush ();
                     __persistent_key_value_pairs_h_debug__ ("Insert: write failed (6).");
                     free (block);
 
                     // 7. (try to) roll-back
+                    __persistent_key_value_pairs_h_debug__ ("INSERT: step 7 - roll-back");
                     if (__dataFile__.seek (blockOffset, SeekSet)) {
                         blockSize = (int16_t) -blockSize;
                         if (__dataFile__.write ((byte *) &blockSize, sizeof (blockSize)) != sizeof (blockSize)) { // can't roll-back
-                            // __dataFile__.flush ();
                             __dataFile__.close (); // memory key value pairs and disk data file are synchronized any more - it is better to clost he file, this would cause all disk related operations from now on to fail
                         }
                     } else { // can't roll-back
@@ -381,16 +392,17 @@
                     Unlock (); // xSemaphoreGiveRecursive (__semaphore__);
                     { lastErrorCode = FILE_IO_ERROR; return FILE_IO_ERROR; }
                 }
+                __dataFile__.flush ();
                 free (block);
 
-                // 7. roll-out
+                // 8. roll-out
+                __persistent_key_value_pairs_h_debug__ ("INSERT: step 8 - roll-out");
                 if (freeBlockIndex == -1) { // data appended to the end of __dataFile__
                     __dataFileSize__ += blockSize;
                 } else { // data written to free block in __dataFile__
                     __freeBlocksList__.erase (freeBlockIndex); // doesn't fail
                 }
 
-                __persistent_key_value_pairs_h_debug__ ("Insert: OK.");
                 Unlock (); // xSemaphoreGiveRecursive (__semaphore__);
                 return OK;
             }
@@ -488,7 +500,7 @@
             */
 
             errorCode Update (keyType key, valueType newValue, uint32_t *pBlockOffset = NULL) {
-                __persistent_key_value_pairs_h_debug__ ("UPDATE ( " + String (key) + " , " + newValue + " , " + (pBlockOffset ? String (*pBlockOffset) : "NULL") + " )");
+                __persistent_key_value_pairs_h_debug__ ("UPDATE ( ... , ... )");
                 if (!__dataFile__) { lastErrorCode = FILE_IO_ERROR; return FILE_IO_ERROR; }
 
                 if (std::is_same<keyType, String>::value)                                                                     // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
@@ -668,7 +680,6 @@
                         if (__dataFile__.seek (newBlockOffset, SeekSet)) {
                             newBlockSize = (int16_t) -newBlockSize;
                             if (__dataFile__.write ((byte *) &newBlockSize, sizeof (newBlockSize)) != sizeof (newBlockSize)) { // can't roll-back
-                                // __dataFile__.flush ();
                                 __dataFile__.close (); // memory key value pairs and disk data file are synchronized any more - it is better to clost he file, this would cause all disk related operations from now on to fail
                             }
                         } else { // can't roll-back
@@ -695,12 +706,12 @@
                     }
                     blockSize = (int16_t) -blockSize;
                     if (__dataFile__.write ((byte *) &blockSize, sizeof (blockSize)) != sizeof (blockSize)) {
-                        // __dataFile__.flush ();
                         __persistent_key_value_pairs_h_debug__ ("Update: write failed (12).");
                         __dataFile__.close (); // data file is corrupt (it contains two entries with the same key) and it si not likely we can roll it back
                         Unlock (); // xSemaphoreGiveRecursive (__semaphore__);
                         { lastErrorCode = FILE_IO_ERROR; return FILE_IO_ERROR; }
                     }
+                    __dataFile__.flush ();
                     // update __freeBlocklist__
                     __persistent_key_value_pairs_h_debug__ ("UPDATE (step 11): add block to free list ( offset , size ) = ( " + String (*pBlockOffset) + " , " + String (-blockSize) + " )");
                     if (__freeBlocksList__.push_back ( {*pBlockOffset, (int16_t) -blockSize} ) != __freeBlocksList__.OK) {
@@ -714,7 +725,6 @@
                 }
 
                 Unlock (); // xSemaphoreGiveRecursive (__semaphore__); 
-                __persistent_key_value_pairs_h_debug__ ("UPDATE: OK.");
                 return OK;
             }
 
@@ -753,8 +763,62 @@
                 }                
 
                 Unlock ();
-                __persistent_key_value_pairs_h_debug__ ("UPDATE: OK.");
                 return OK;
+            }
+
+
+           /*
+            *  Updates or inserts key-value pair
+            */
+
+            errorCode Upsert (keyType key, valueType newValue) {
+                __persistent_key_value_pairs_h_debug__ ("UPSERT ( ... , ... )");
+                if (!__dataFile__) { lastErrorCode = FILE_IO_ERROR; return FILE_IO_ERROR; }
+
+                if (std::is_same<keyType, String>::value)                                                                     // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
+                    if (!(String *) &key) {                                                                                   // ... check if parameter construction is valid
+                        __persistent_key_value_pairs_h_debug__ ("Update: key constructor failed.");
+                        { lastErrorCode = BAD_ALLOC; return BAD_ALLOC; }
+                    }
+                if (std::is_same<valueType, String>::value)                                                                   // if value is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
+                    if (!(String *) &newValue) {                                                                              // ... check if parameter construction is valid
+                        __persistent_key_value_pairs_h_debug__ ("Update: value constructor failed.");
+                        { lastErrorCode = BAD_ALLOC; return BAD_ALLOC; }
+                    }
+
+                Lock (); 
+                errorCode e = Update (key, newValue);
+                if (e == NOT_FOUND) e = Insert (key, newValue);
+                Unlock ();
+
+                return e; 
+            }
+
+           /*
+            *  Updates or inserts the value associated with the key throught callback function (usefull for counting, etc, when all the calculation should be done while locking is in place)
+            */
+
+            errorCode Upsert (keyType key, void (*updateCallback) (valueType &value), valueType defaultValue) {
+                __persistent_key_value_pairs_h_debug__ ("UPSERT ( " + String (key) + " , callbackFunction () )");
+                if (!__dataFile__) { lastErrorCode = FILE_IO_ERROR; return FILE_IO_ERROR; }
+
+                if (std::is_same<keyType, String>::value)                                                                     // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
+                    if (!(String *) &key) {                                                                                   // ... check if parameter construction is valid
+                        __persistent_key_value_pairs_h_debug__ ("Update: key constructor failed.");
+                        { lastErrorCode = BAD_ALLOC; return BAD_ALLOC; }
+                    }
+                if (std::is_same<valueType, String>::value)                                                                   // if value is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
+                    if (!(String *) &defaultValue) {                                                                          // ... check if parameter construction is valid
+                        __persistent_key_value_pairs_h_debug__ ("Update: value constructor failed.");
+                        { lastErrorCode = BAD_ALLOC; return BAD_ALLOC; }
+                    }
+
+                Lock (); 
+                errorCode e = Update (key, updateCallback);
+                if (e == NOT_FOUND) e = Insert (key, defaultValue);
+                Unlock ();
+
+                return e;                 
             }
 
 
@@ -826,13 +890,12 @@
                     __persistent_key_value_pairs_h_debug__ ("Delete: seek failed (4).");
                     // 5. (try to) roll-back
                     if (keyValuePairs<keyType, uint32_t>::insert (key, (uint32_t) blockOffset) != keyValuePairs<keyType, uint32_t>::OK) {
-                        __dataFile__.close (); // memory key value pairs and disk data file are synchronized any more - it is better to clost he file, this would cause all disk related operations from now on to fail
+                        __dataFile__.close (); // memory key value pairs and disk data file are synchronized any more - it is better to clost the file, this would cause all disk related operations from now on to fail
                     }
                     Unlock (); // xSemaphoreGiveRecursive (__semaphore__);
                     { lastErrorCode = FILE_IO_ERROR; return FILE_IO_ERROR; }
                 }
                 if (__dataFile__.write ((byte *) &blockSize, sizeof (blockSize)) != sizeof (blockSize)) {
-                    __dataFile__.flush ();
                     __persistent_key_value_pairs_h_debug__ ("Delete: write failed (4).");
                      // 5. (try to) roll-back
                     if (keyValuePairs<keyType, uint32_t>::insert (key, (uint32_t) blockOffset) != keyValuePairs<keyType, uint32_t>::OK) {
@@ -841,6 +904,7 @@
                     Unlock (); // xSemaphoreGiveRecursive (__semaphore__);
                     { lastErrorCode = FILE_IO_ERROR; return FILE_IO_ERROR; }
                 }
+                __dataFile__.flush ();
 
                 // 5. add the block to __freeBlockList__
                 __persistent_key_value_pairs_h_debug__ ("DELETE (step 5): add block to free list ( offset , size ) = ( " + String (blockOffset) + " , " + String (-blockSize) + " )");
@@ -853,7 +917,6 @@
                 }
 
                 Unlock (); // xSemaphoreGiveRecursive (__semaphore__); 
-                __persistent_key_value_pairs_h_debug__ ("DELETE: OK.");
                 return OK;
             }
 

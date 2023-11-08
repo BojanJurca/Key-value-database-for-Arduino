@@ -94,6 +94,6 @@ Well, it depends, but if we make some assumptions we can give some answers. Say 
 
 ### How fast the insert and find operations are?
 
-Time complexity of a balanced binary search tree implemented beneath persistent key-value pairs can be estimated by O (log n), where n is the number of key-value pairs already inserted. But the max number of key-value pairs is relatively small so the speed of disk IO operations prevails. LittleFS file system uses less memory and leaves more of it to the persistent key-value pairs. But regarding the speed of IO operations, FAT file system perform much better. Here are some measurements:
+Time complexity of a balanced binary search tree implemented beneath persistent key-value pairs can be estimated by O (log n), where n is the number of key-value pairs already inserted. But the max number of key-value pairs is relatively small so the speed of disk IO operations prevails. LittleFS file system uses less memory and leaves more of it to the persistent key-value pairs. It performs better than FAT with inserts but worse with finds. Here are some measurements:
 
 ![insert_find_times](insert_find_times.gif)
