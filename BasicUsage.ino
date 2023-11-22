@@ -1,6 +1,6 @@
 #include <WiFi.h>
 
-#define FILE_SYSTEM FILE_SYSTEM_FAT // or FILE_SYSTEM_LITTLEFS
+#define FILE_SYSTEM   FILE_SYSTEM_LITTLEFS // or FILE_SYSTEM FILE_SYSTEM_FAT 
 #include "fileSystem.hpp"
 
 #include "persistentKeyValuePairs.h"
@@ -11,9 +11,8 @@ persistentKeyValuePairs<int, String> pkvpA;
 void setup () {
     Serial.begin (115200);
 
-    // fileSystem.formatFAT (); Serial.printf ("\nFormatting FAT file system ...\n\n"); // format flash disk to reset everithing and start from the scratch
-    fileSystem.mountFAT (true); // or fileSystem.mountLittleFs (true); // or 
-
+    // fileSystem.formatLittleFs (); Serial.printf ("\nFormatting LittleFS file system ...\n\n"); // format flash disk to reset everithing and start from the scratch
+    fileSystem.mountLittleFs (true); // or fileSystem.mountFAT (true);
     // create directory for data files
     if (!fileSystem.isDirectory ("/var/persistentKeyValuePairs")) { fileSystem.makeDirectory ("/var"); fileSystem.makeDirectory ("/var/persistentKeyValuePairs"); }
     // fileSystem.deleteFile ("/var/persistentKeyValuePairs/A.kvp");
@@ -25,10 +24,9 @@ void setup () {
     else
         Serial.printf ("pkvpA initially loaded %i key-value pairs\n", pkvpA.size ());
 
-    persistentKeyValuePairs<int, String>::errorCode e;
+    int e;
 
-
-    // insert a key-value pairs
+    // insert key-value pairs
     e = pkvpA.Insert (7, "seven"); 
     if (e != pkvpA.OK)
         Serial.printf ("pkvpA Insert failed: %s\n", pkvpA.errorCodeText (e));
@@ -90,11 +88,11 @@ void setup () {
     // Iterate through (list) all key-value pairs
     for (auto p: pkvpA) {
         // keys are always kept in memory and are obtained fast
-        Serial.print (p->key); Serial.print (", "); Serial.print (p->blockOffset); Serial.print (" -> "); 
+        Serial.print (p.key); Serial.print (", "); Serial.print (p.blockOffset); Serial.print (" -> "); 
         
         // values are read from disk, obtaining a value may be much slower
         String value;
-        e = pkvpA.FindValue (p->key, &value, p->blockOffset);
+        e = pkvpA.FindValue (p.key, &value, p.blockOffset); // blockOffset is optional but since we already have it we can speed up the search a bit by providing it
         if (e == pkvpA.OK) 
             Serial.println (value);
         else
@@ -104,12 +102,21 @@ void setup () {
 
     // update the values (with calculation) during iteration. Please note that persistent key value pairs are already being locked throughtout the iteration, so additional locking is not required.
     for (auto p: pkvpA) {
-        String value;
-        e = pkvpA.FindValue (p->key, &value, p->blockOffset);
-        if (e == pkvpA.OK) 
-            pkvpA.Update (p->key, "(" + value + ")", &(p->blockOffset)); // since block offset is already known it will speed up Update operation if we provide this information
-        else
+        e = pkvpA.Update (p.key, [] (String& value) { value = "»" + value + "«"; }, &(p.blockOffset)); // since block offset is already known it will speed up Update operation if we provide this information
+        if (e) 
             Serial.printf ("Error: %s\n", pkvpA.errorCodeText (e));
+    }
+
+
+    // see if it worked
+    for (auto p: pkvpA) {
+        String value;
+        e = pkvpA.FindValue (p.key, &value, p.blockOffset);
+        if (!e) {
+            Serial.print (p.key); Serial.print (" - "); Serial.println (value);
+        } else {
+             Serial.print (p.key); Serial.print (" - "); Serial.printf ("Error: %s while fetching a value from disk\n", pkvpA.errorCodeText (e));
+        }
     }
 
 
