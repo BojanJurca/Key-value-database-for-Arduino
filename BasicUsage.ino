@@ -3,7 +3,7 @@
 #define FILE_SYSTEM   FILE_SYSTEM_LITTLEFS // or FILE_SYSTEM FILE_SYSTEM_FAT 
 #include "fileSystem.hpp"
 
-#include "persistentKeyValuePairs.h"
+#include "persistentKeyValuePairs.hpp"
 
 persistentKeyValuePairs<int, String> pkvpA;
 

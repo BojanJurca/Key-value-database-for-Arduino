@@ -12,7 +12,7 @@ Persistent key-value pairs library that offers a kind of structured data storage
 #define FILE_SYSTEM FILE_SYSTEM_FAT // or FILE_SYSTEM_LITTLEFS
 #include "fileSystem.hpp"
 
-#include "persistentKeyValuePairs.h"
+#include "persistentKeyValuePairs.hpp"
 persistentKeyValuePairs<int, String> pkvpA;
 
 void setup () {
