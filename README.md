@@ -39,7 +39,7 @@ void setup () {
 
 ```C++
         String value;
-        e = pkvpA.FindValue (p->key, &value, p->blockOffset);
+        e = pkvpA.FindValue (7, &value);
         if (e == pkvpA.OK) 
             Serial.println (value);
         else
@@ -49,7 +49,7 @@ void setup () {
 ### Update (value for a given key)
 
 ```C++
-    e = pkvpA.Update (8, "eight"); 
+    e = pkvpA.Update (7, "SEVEN"); 
     if (e != pkvpA.OK)
         Serial.printf ("pkvpA Update failed: %s\n", pkvpA.errorCodeText (e));
 ```
@@ -73,11 +73,11 @@ void setup () {
 ```C++
     for (auto p: pkvpA) {
         // keys are always kept in memory and are obtained fast
-        Serial.print (p.key); Serial.print (", "); Serial.print (p.blockOffset); Serial.print (" -> "); 
+        Serial.print (p->key); Serial.print (", "); Serial.print (p->blockOffset); Serial.print (" -> "); 
         
         // values are read from disk, obtaining a value may be much slower
         String value;
-        e = pkvpA.FindValue (p.key, &value, p.blockOffset);
+        e = pkvpA.FindValue (p->key, &value, p->blockOffset);
         if (e == pkvpA.OK) 
             Serial.println (value);
         else
@@ -359,9 +359,9 @@ Class member iterator iterates through memory structure (binary balanced search 
     pkvpA.clearLastErrorCode ();
     for (auto p: pkvpA) {
         String value;
-        e = pkvpA.FindValue (p.key, &value, p.blockOffset);
+        e = pkvpA.FindValue (p->key, &value, p->blockOffset);
         if (!e) {
-            Serial.print (p.key); Serial.print (" - "); Serial.println (value);
+            Serial.print (p->key); Serial.print (" - "); Serial.println (value);
         } else {
              ... handle the error
              break;

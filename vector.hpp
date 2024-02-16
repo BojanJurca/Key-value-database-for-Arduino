@@ -26,7 +26,7 @@
  *
  * Vector functions are not thread-safe.
  * 
- *  Bojan Jurca, December 6, 2023
+ * Bojan Jurca, February 6, 2024
  *  
  */
 
@@ -211,7 +211,7 @@
 
     
            /*
-            *  Same as [] operator, so it is not really needed but added here because it is supported in standard C++ vectors
+            *  Same as [] operator, so it is not really needed but added here because it is supported in STL C++ vectors
             */      
 
             vectorType &at (int position) {
@@ -332,7 +332,7 @@
             }
 
            /*
-            * push_front (unlike push_back) is not a standard C++ vector member function
+            * push_front (unlike push_back) is not a STL C++ vector member function
             */
               
             errorCode push_front (vectorType element) {
@@ -386,7 +386,7 @@
 
 
            /*
-            * pop_front (unlike pop_back) is not a standard C++ vector member function
+            * pop_front (unlike pop_back) is not a STL C++ vector member function
             */
         
             errorCode pop_front () {
@@ -608,7 +608,7 @@
 
 
            /*
-            *  Iterator is needed in order for standard C++ for each loop to work. 
+            *  Iterator is needed in order for STL C++ for each loop to work. 
             *  A good source for iterators is: https://www.internalpointers.com/post/writing-custom-iterators-modern-cpp
             *  
             *  Example:
@@ -621,7 +621,10 @@
               public:
                           
                 // constructor
-                Iterator (vector* vect) { __vector__ = vect; }
+                Iterator (vector* vect, int pos) { 
+                    __vector__ = vect; 
+                    __position__ = pos;
+                }
                 
                 // * operator
                 vectorType& operator *() const { return __vector__->at (__position__); }
@@ -630,17 +633,51 @@
                 Iterator& operator ++ () { __position__ ++; return *this; }
       
                 // C++ will stop iterating when != operator returns false, this is when __position__ counts to vector.size ()
-                friend bool operator != (const Iterator& a, const Iterator& b) { return a.__position__ != a.__vector__->size (); }
+                // friend bool operator != (const Iterator& a, const Iterator& b) { return a.__position__ != a.__vector__->size (); }
+                friend bool operator != (const Iterator& a, const Iterator& b) { return a.__position__ <= b.__position__; }
+
+                // this will tell if iterator is valid (if the vector doesn't have elements the iterator can not be valid)
+                operator bool () const { return __vector__->size () > 0; }
         
             private:
       
                 vector* __vector__;
-                int __position__ = 0;
+                int __position__;
                 
             };      
       
-            Iterator begin () { return Iterator (this); }  
-            Iterator end () { return Iterator (this); }
+            Iterator begin () { return Iterator (this, 0); }  
+            Iterator end () { return Iterator (this, this->size () - 1); }
+
+
+           /*
+            *  Finds min and max element in the vector - for compatibiity with STL C++ library the return value is an interator.
+            *
+            *  Example:
+            *  
+            *      vector<int> vect = {1, 2, 3};
+            *      auto minElement = vect.min_element ();
+            *      if (minElement) // check if min element is found (if vect is not empty)
+            *          Serial.printf ("min element = %i\n", *minElement);
+            */
+
+            Iterator min_element () {
+                auto minIt = begin ();
+
+                for (auto it = begin (); it != end (); ++ it) 
+                    if (*it < *minIt) minIt = it;
+
+                return minIt;
+            }
+
+            Iterator max_element () {
+                auto maxIt = begin ();
+
+                for (auto it = begin (); it != end (); ++ it) 
+                    if (*it > *maxIt) maxIt = it;
+
+                return maxIt;
+            }
 
 
             #ifdef __VECTOR_H_DEBUG__
@@ -936,7 +973,7 @@
 
     
            /*
-            *  Same as [] operator, so it is not really needed but added here because it is supported in standard C++ vectors
+            *  Same as [] operator, so it is not really needed but added here because it is supported in STL C++ vectors
             */      
 
             String &at (int position) {
@@ -1061,7 +1098,7 @@
             }
 
            /*
-            * push_front (unlike push_back) is not a standard C++ vector member function
+            * push_front (unlike push_back) is not a STL C++ vector member function
             */
               
             errorCode push_front (String element) {
@@ -1122,7 +1159,7 @@
 
 
            /*
-            * pop_front (unlike pop_back) is not a standard C++ vector member function
+            * pop_front (unlike pop_back) is not a STL C++ vector member function
             */
         
             errorCode pop_front () {
@@ -1375,7 +1412,7 @@
 
             
            /*
-            *  Iterator is needed in order for standard C++ for each loop to work. 
+            *  Iterator is needed in order for STL C++ for each loop to work. 
             *  A good source for iterators is: https://www.internalpointers.com/post/writing-custom-iterators-modern-cpp
             *  
             *  Example:
@@ -1388,7 +1425,10 @@
               public:
                           
                 // constructor
-                Iterator (vector* vect) { __vector__ = vect; }
+                Iterator (vector* vect, int pos) { 
+                    __vector__ = vect; 
+                    __position__ = pos;
+                }
                 
                 // * operator
                 String& operator *() const { return __vector__->at (__position__); }
@@ -1397,17 +1437,51 @@
                 Iterator& operator ++ () { __position__ ++; return *this; }
       
                 // C++ will stop iterating when != operator returns false, this is when __position__ counts to vector.size ()
-                friend bool operator != (const Iterator& a, const Iterator& b) { return a.__position__ != a.__vector__->size (); }
+                // friend bool operator != (const Iterator& a, const Iterator& b) { return a.__position__ != a.__vector__->size (); }
+                friend bool operator != (const Iterator& a, const Iterator& b) { return a.__position__ <= b.__position__; }
+
+                // this will tell if iterator is valid (if the vector doesn't have elements the iterator can not be valid)
+                operator bool () const { return __vector__->size () > 0; }
         
             private:
       
                 vector* __vector__;
-                int __position__ = 0;
+                int __position__;
                 
             };      
       
-            Iterator begin () { return Iterator (this); }  
-            Iterator end () { return Iterator (this); }
+            Iterator begin () { return Iterator (this, 0); }  
+            Iterator end () { return Iterator (this, this->size () - 1); }
+
+           /*
+            *  Finds min and max element in the vector - for compatibiity with STL C++ library the return value is an interator.
+            *
+            *  Example:
+            *  
+            *      vector<String> vect = {"one", "two", "tree"};
+            *      auto minElement = vect.min_element ();
+            *      if (minElement) // check if min element is found (if vect is not empty)
+            *          Serial.printf ("min element = %s\n", *minElement.c_str ());
+            */
+
+
+            Iterator min_element () {
+                auto minIt = begin ();
+
+                for (auto it = begin (); it != end (); ++ it) 
+                    if (*it < *minIt) minIt = it;
+
+                return minIt;
+            }
+
+            Iterator max_element () {
+                auto maxIt = begin ();
+
+                for (auto it = begin (); it != end (); ++ it) 
+                    if (*it > *maxIt) maxIt = it;
+
+                return maxIt;
+            }
 
 
             #ifdef __VECTOR_H_DEBUG__
@@ -1519,5 +1593,30 @@
             }
 
     };
+
+
+    /*
+    *  It would be more natural to use min_element and max_element member functions,
+    *  but let's try to make the interface close to STL C++.
+    *
+    *  Example:
+    *  
+    *      vector<int> vect = {1, 2, 3};
+    *      auto minElement = min_element (vect);
+    *      if (minElement) // check if min element is found (if vect has elements)
+    *          Serial.printf ("min element = %i\n", *minElement);
+    */
+
+    #ifndef __MIN_MAX_ELEMENT__ 
+        #define __MIN_MAX_ELEMENT__
+
+        template <typename T>
+        typename T::Iterator min_element (T& obj) { return obj.min_element (); }
+
+        template <typename T>
+        typename T::Iterator max_element (T& obj) { return obj.max_element (); }
+
+    #endif
+
 
 #endif

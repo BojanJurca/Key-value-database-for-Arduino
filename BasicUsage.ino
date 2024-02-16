@@ -11,6 +11,7 @@ persistentKeyValuePairs<int, String> pkvpA;
 void setup () {
     Serial.begin (115200);
 
+
     // fileSystem.formatLittleFs (); Serial.printf ("\nFormatting LittleFS file system ...\n\n"); // format flash disk to reset everithing and start from the scratch
     fileSystem.mountLittleFs (true); // or fileSystem.mountFAT (true);
     // create directory for data files
@@ -23,6 +24,11 @@ void setup () {
         Serial.printf ("pkvpA failed to load data: %s, all the data may not be indexed\n", pkvpA.errorCodeText (pkvpA.lastErrorCode));
     else
         Serial.printf ("pkvpA initially loaded %i key-value pairs\n", pkvpA.size ());
+
+
+    // truncate (delete) all key-value pairs in case there are some already in pkvpA
+    pkvpA.Truncate ();
+
 
     int e;
 
@@ -56,7 +62,6 @@ void setup () {
         default:              Serial.printf ("pkvpA FindValue error: %s\n", pkvpA.errorCodeText (e)); break;
     }    
 
-
     // delete a key-value pair
     e = pkvpA.Delete (7); 
     if (e != pkvpA.OK)
@@ -78,6 +83,7 @@ void setup () {
     if (e != pkvpA.OK)
         Serial.printf ("pkvpA Update failed: %s\n", pkvpA.errorCodeText (e));
 
+
     // update (3) the value with calculation using lambda callback function
     // (the locking is already integrated so the calculation can be performed without problems - this mechanism is usefull for example for counters (increasing the value), etc)
     e = pkvpA.Update (9, [] (String& value) { value.toUpperCase (); } ); 
@@ -88,11 +94,11 @@ void setup () {
     // Iterate through (list) all key-value pairs
     for (auto p: pkvpA) {
         // keys are always kept in memory and are obtained fast
-        Serial.print (p.key); Serial.print (", "); Serial.print (p.blockOffset); Serial.print (" -> "); 
+        Serial.print (p->key); Serial.print (", "); Serial.print (p->blockOffset); Serial.print (" -> "); 
         
         // values are read from disk, obtaining a value may be much slower
         String value;
-        e = pkvpA.FindValue (p.key, &value, p.blockOffset); // blockOffset is optional but since we already have it we can speed up the search a bit by providing it
+        e = pkvpA.FindValue (p->key, &value, p->blockOffset); // blockOffset is optional but since we already have it we can speed up the search a bit by providing it
         if (e == pkvpA.OK) 
             Serial.println (value);
         else
@@ -102,7 +108,7 @@ void setup () {
 
     // update the values (with calculation) during iteration. Please note that persistent key value pairs are already being locked throughtout the iteration, so additional locking is not required.
     for (auto p: pkvpA) {
-        e = pkvpA.Update (p.key, [] (String& value) { value = "»" + value + "«"; }, &(p.blockOffset)); // since block offset is already known it will speed up Update operation if we provide this information
+        e = pkvpA.Update (p->key, [] (String& value) { value = "»" + value + "«"; }, &(p->blockOffset)); // since block offset is already known it will speed up Update operation if we provide this information
         if (e) 
             Serial.printf ("Error: %s\n", pkvpA.errorCodeText (e));
     }
@@ -111,11 +117,11 @@ void setup () {
     // see if it worked
     for (auto p: pkvpA) {
         String value;
-        e = pkvpA.FindValue (p.key, &value, p.blockOffset);
+        e = pkvpA.FindValue (p->key, &value, p->blockOffset);
         if (!e) {
-            Serial.print (p.key); Serial.print (" - "); Serial.println (value);
+            Serial.print (p->key); Serial.print (" - "); Serial.println (value);
         } else {
-             Serial.print (p.key); Serial.print (" - "); Serial.printf ("Error: %s while fetching a value from disk\n", pkvpA.errorCodeText (e));
+             Serial.print (p->key); Serial.print (" - "); Serial.printf ("Error: %s while fetching a value from disk\n", pkvpA.errorCodeText (e));
         }
     }
 
@@ -128,8 +134,15 @@ void setup () {
         Serial.printf ("100 inserts error: %s\n", pkvpA.errorCodeText (pkvpA.lastErrorCode));
 
 
-    // truncate (delete) all key-value pairs
-    pkvpA.Truncate ();
+    // find first (last) keys
+    Serial.println ("--- first_element, last_element ---");
+    auto firstElement = first_element (pkvpA);
+    if (firstElement) // check if first element is found (if pkvpA is not empty)
+        Serial.printf ("first element (min key) of pkvpA = %i\n", (*firstElement)->key);
+
+    auto lastElement = last_element (pkvpA);
+    if (lastElement) // check if last element is found (if kvp3 is not empty)
+        Serial.printf ("last element (max key) of pkvpA = %i\n", (*lastElement)->key);
 
 }
 

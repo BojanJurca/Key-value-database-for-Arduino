@@ -7,7 +7,7 @@
  *
  * Key-valu-pairs functions are not thread-safe.
  * 
- * Bojan Jurca, January 3, 2024
+ * Bojan Jurca, February 14, 2024
  *  
  */
 
@@ -87,7 +87,7 @@
            */
            
           keyValuePairs () {}
-    
+
   
           /*
            *  Constructor of keyValuePairs from brace enclosed initializer list allows the following kinds of creation of key-value pairs: 
@@ -163,7 +163,7 @@
           keyValuePairs (keyValuePairs& other) {
               // copy other's elements
               for (auto e: other) {
-                  int h = this->__insert__ (&__root__, e.key, e.value); if  (h >= 0) __height__ = h;
+                  int h = this->__insert__ (&__root__, e->key, e->value); if  (h >= 0) __height__ = h;
               }
               // copy the error code as well
               if (!lastErrorCode) lastErrorCode = other.lastErrorCode;
@@ -186,17 +186,17 @@
               for (auto e: other) {
 
                   if (std::is_same<keyType, String>::value)   // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                      if (!e.key) {                           // ... check if parameter construction is valid
+                      if (!e->key) {                           // ... check if parameter construction is valid
                           lastErrorCode = BAD_ALLOC;          // report error if it is not
                           return this;
                       }
                   if (std::is_same<valueType, String>::value) // if value is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                      if (!e.value) {                         // ... check if parameter construction is valid
+                      if (!e->value) {                         // ... check if parameter construction is valid
                           lastErrorCode = BAD_ALLOC;          // report error if it is not
                           return this;
                       }
 
-                  int h = this->__insert__ (&__root__, e.key, e.value); if  (h >= 0) __height__ = h;
+                  int h = this->__insert__ (&__root__, e->key, e->value); if  (h >= 0) __height__ = h;
               }
               // copy the error code as well
               if (!lastErrorCode) lastErrorCode = other.lastErrorCode;
@@ -296,22 +296,29 @@
           }
   
       
-          // iterator
+          /*
+          *   Iterator
+          *   
+          *   Example:
+          *    for (auto pair: kvp)
+          *        Serial.println (String (pair.key) + "-" + String (pair.value));
+          */
       
       private:
       
           struct __balancedBinarySearchTreeNode__; // forward private declaration
 
       public:
-                
+
           class Iterator {
+
             public:
             
-              // constructor
+              // constructor called from begin () and first_element () - stack is needed for iterating through balanced binary search tree nodes
               Iterator (keyValuePairs* kvp, int8_t stackSize) {
                   __kvp__ = kvp;
   
-                  if (!kvp || !stackSize) return; // when end () is beeing called stack for balanced binary search tree iteration is not needed
+                  if (!kvp || !stackSize) return; // when end () is beeing called, stack for balanced binary search tree iteration is not needed (only the begin instance iterates)
   
                   // create a stack for balanced binary search tree iteration
                   
@@ -336,34 +343,69 @@
                       __stack__ [++ __stackPointer__] = p;                      
                       p = p->leftSubtree;
                   }
+                  __lastVisitedPair__ = __stack__ [__stackPointer__]; // remember the last visited pair
                   __key_value_pair_h_debug__ ("Iterator: starting at: " + String ( __stack__ [__stackPointer__]->pair.key ));
               }
 
+              // constructor called from last_element () - stack is not really needed but construct it anyway
+              Iterator (int8_t stackSize, keyValuePairs* kvp) {
+                  __kvp__ = kvp;
+  
+                  if (!kvp || !stackSize) return; // when end () is beeing called, stack for balanced binary search tree iteration is not needed (only the begin instance iterates)
+  
+                  // create a stack for balanced binary search tree iteration
+                  
+                  /// #ifdef __KEY_VALUE_PAIR_H_EXCEPTIONS__
+                  ///     __stack__ = new keyValuePairs::__balancedBinarySearchTreeNode__ *[stackSize](); // initialize stack with NULL pointers
+                  /// #else
+                  ///     __stack__ = new (std::nothrow) keyValuePairs::__balancedBinarySearchTreeNode__ *[stackSize](); // initialize stack with NULL pointers
+                  /// #endif
+                  /// if (__stack__ == NULL) {
+                  ///     __key_value_pair_h_debug__ ("Iterator: not enough memory to create stack.");
+                  ///     __kvp__->lastErrorCode = BAD_ALLOC;
+                  ///     return;
+                  /// }
+                  // memset ((byte *) __stack__, 0, sizeof (__stack__)); // clear the stack
+
+                  if (stackSize >= __KEY_VALUE_PAIRS_MAX_STACK_SIZE__) throw (BAD_ALLOC);
+  
+                  // find the highest pair in the balanced binary search tree (this would be the righttmost one) and fill the stack meanwhile
+                  keyValuePairs::__balancedBinarySearchTreeNode__* p = kvp->__root__;
+
+                  while (p) {
+                      __stack__ [++ __stackPointer__] = p;                      
+                      p = p->rightSubtree;
+                  }
+                  __lastVisitedPair__ = __stack__ [__stackPointer__]; // remember the last visited pair
+                  __key_value_pair_h_debug__ ("Iterator: starting at: " + String ( __stack__ [__stackPointer__]->pair.key ));
+              }
 
               // free the memory occupied by the stack
               ~Iterator () { 
                   /// if (__stack__) delete [] __stack__; 
               }
 
-              
+
               // * operator
-              keyValuePair & operator * () const { return __stack__ [__stackPointer__]->pair; }
-          
+              // keyValuePair & operator * () const { return __stack__ [__stackPointer__]->pair; }
+              keyValuePair * operator * () const { return &(__lastVisitedPair__->pair); }              
+
               // ++ (prefix) increment actually moves the state of the stack so that the last element points to the next balanced binary search tree node
               Iterator& operator ++ () { 
 
-                  // the current node is pointed to by stack pointer, move to the next node 
-                  
+                  // the current node is pointed to by stack pointer, move to the next node
+
                   // if the node has a right subtree find the leftmost element in the right subtree and fill the stack meanwhile
                   if (__stack__ [__stackPointer__]->rightSubtree != NULL) {
                       __key_value_pair_h_debug__ ("Iterator: going to the right subtree");
                       keyValuePairs::__balancedBinarySearchTreeNode__* p = __stack__ [__stackPointer__]->rightSubtree;
                       if (p && p != __stack__ [__stackPointer__ + 1]) { // if the right subtree has not ben visited yet, proceed with the right subtree
-                            while (p) {
-                                __stack__ [++ __stackPointer__] = p;
-                                p = p->leftSubtree;
-                            }
-                         return *this; 
+                          while (p) {
+                              __stack__ [++ __stackPointer__] = p;
+                              p = p->leftSubtree;
+                          }
+                          __lastVisitedPair__ = __stack__ [__stackPointer__]; // remember the last visited pair
+                          return *this; 
                       }
                   }
                   // else proceed with climbing up the stack to the first pair that is greater than the current node
@@ -372,26 +414,79 @@
                       int8_t i = __stackPointer__;
                       -- __stackPointer__;
                       while (__stackPointer__ >= 0 && __stack__ [__stackPointer__]->pair.key < __stack__ [i]->pair.key) __stackPointer__ --;
+                      __lastVisitedPair__ = __stack__ [__stackPointer__]; // remember the last visited pair
                       return *this;
                   }
               }  
 
               // C++ will stop iterating when != operator returns false, this is when all nodes have been visited and stack pointer is negative
               friend bool operator != (const Iterator& a, const Iterator& b) { return a.__stackPointer__ >= 0; };     
+
+              // this will tell if iterator is valid (if there are not elements the iterator can not be valid)
+              operator bool () const { return __kvp__->size () > 0; }
           
           private:
           
-              keyValuePairs* __kvp__;
+              keyValuePairs* __kvp__ = NULL;
 
-              // a stack is needed to iterate through tree nodes
+              // a stack is needed to iterate through binary balanced search tree nodes
               /// keyValuePairs::__balancedBinarySearchTreeNode__ **__stack__ = NULL;
               keyValuePairs::__balancedBinarySearchTreeNode__ *__stack__ [__KEY_VALUE_PAIRS_MAX_STACK_SIZE__] = {};
               int8_t __stackPointer__ = -1;
+              keyValuePairs::__balancedBinarySearchTreeNode__ *__lastVisitedPair__;
 
           };      
  
-          Iterator begin () { return Iterator (this, __height__); } // C++ only iterates with begin instance ...
-          Iterator end ()   { return Iterator (NULL, 0); } // ... so end instance is not really needed and doesn't need its own stack at all
+          Iterator begin () { return Iterator (this, __height__); } // only the begin () instance is neede for iteration ...
+          Iterator end ()   { return Iterator ((int8_t) 0, (keyValuePairs *) NULL); } // ... so construct the dummy end () instance without stack - this would prevent it moving __lastVisitedPair__ variable
+
+
+           /*
+            *  Finds min and max values in keyValuePairs.
+            *
+            *  Example:
+            *  
+            *     keyValuePairs<int, String> kvp = { {4, "four"}, {3, "tree"}, {6, "six"}, {5, "five"} };
+            *     auto minElement = kvp.min_element ();
+            *     if (minElement) // check if min element is found (if kvp is not empty)
+            *         Serial.printf ("min element of kvp = %s\n", (*minElement).value.c_str ());
+            */
+
+          Iterator min_element () {
+              auto minIt = begin ();
+
+              for (auto it = begin (); it != end (); ++ it)
+                  if ((*it)->value < (*minIt)->value) 
+                      minIt = it;
+
+              return minIt;
+          }
+
+          Iterator max_element () {
+              auto maxIt = begin ();
+
+              for (auto it = begin (); it != end (); ++ it) 
+                  if ((*it)->value > (*maxIt)->value) 
+                      maxIt = it;
+
+              return maxIt;
+          }
+
+
+           /*
+            *  Finds min and max keys in keyValuePairs.
+            *
+            *  Example:
+            *  
+            *     keyValuePairs<int, String> kvp = { {4, "four"}, {3, "tree"}, {6, "six"}, {5, "five"} };
+            *     auto firstElement = kvp.first_element ();
+            *     if (firstElement) // check if the first element is found (if kvp is not empty)
+            *         Serial.printf ("first element of kvp = %i\n", (*firstElement).key);
+            */
+
+          Iterator first_element () { return Iterator (this, __height__); } // call the 'begin' constructor
+
+          Iterator last_element () { return Iterator (__height__, this); } // call the 'end' constructor
 
 
           #ifdef __KEY_VALUE_PAIR_H_DEBUG__
@@ -699,5 +794,42 @@
           }
   
     };
+
+
+    /*
+    *  It would be more natural to use min_element and max_element member functions,
+    *  but let's try to make compatible with vectors.
+    *
+    *  Example:
+    *  
+    *     keyValuePairs<int, String> kvp = { {4, "four"}, {3, "tree"}, {6, "six"}, {5, "five"} };
+    *     auto minElement = min_element (kvp);
+    *     if (minElement) // check if min element is found (if kvp is not empty)
+    *         Serial.printf ("min element of kvp = %s\n", (*minElement).value.c_str ());
+    */
+
+    #ifndef __MIN_MAX_ELEMENT__ 
+        #define __MIN_MAX_ELEMENT__
+
+        template <typename T>
+        typename T::Iterator min_element (T& obj) { return obj.min_element (); }
+
+        template <typename T>
+        typename T::Iterator max_element (T& obj) { return obj.max_element (); }
+
+    #endif
+
+
+    #ifndef __FIRST_LAST_ELEMENT__ 
+        #define __FIRST_LAST_ELEMENT__
+
+        template <typename T>
+        typename T::Iterator first_element (T& obj) { return obj.first_element (); }
+
+        template <typename T>
+        typename T::Iterator last_element (T& obj) { return obj.last_element (); }
+
+    #endif
+
 
 #endif
