@@ -2,9 +2,9 @@
   
     fileSystem.hpp 
     
-    This file is part of Esp32_web_ftp_telnet_server_template project: https://github.com/BojanJurca/Multitasking-Esp32-HTTP-FTP-Telnet-servers-for-Arduino
+    This file is part of Multitasking Esp32 HTTP FTP Telnet servers for Arduino project: https://github.com/BojanJurca/Multitasking-Esp32-HTTP-FTP-Telnet-servers-for-Arduino
     
-    August 12, 2023, Bojan Jurca
+    March 12, 2024, Bojan Jurca
 
     FFAT or LittleFS for ESP32 built-in flash disk
 
@@ -15,8 +15,6 @@
 
         https://github.com/espressif/arduino-esp32/tree/master/libraries/SD
 
-        With the following exception: VDD is connected to 5V instead of 3V3, it looks like 3V3 is not enough to power the SD card
-
 */
 
 
@@ -25,7 +23,7 @@
     #include <WiFi.h>
     #include <FS.h>
     // fixed size strings
-    #include "fsString.h"
+    #include "fsString.hpp"
 
 
 #ifndef __FILE_SYSTEM__
@@ -129,7 +127,7 @@
                             if (__fileSystem__.format ()) {
                                 Serial.printf ("[%10lu] [fileSystem] ... formatted\n", millis ());
                                 #ifdef __DMESG__
-                                    dmesg ("[fileSystem] formatted.");
+                                    dmesgQueue.push_back ("[fileSystem] formatted.");
                                 #endif
                                 if (__fileSystem__.begin (false)) {
                                     __builtinFlashDiskMounted__ = true;
@@ -137,7 +135,7 @@
                             } else {
                                 Serial.printf ("[%10lu] [fileSystem] ... formatting failed\n", millis ());
                                 #ifdef __DMESG__
-                                    dmesg ("[fileSystem] formatting failed.");
+                                    dmesgQueue.push_back ("[fileSystem] formatting failed.");
                                 #endif
                             }
                         }
@@ -146,12 +144,12 @@
                     if (__builtinFlashDiskMounted__) {
                         Serial.printf ("[%10lu] [fileSystem] FAT mounted\n", millis ());
                         #ifdef __DMESG__
-                            dmesg ("[fileSystem] FAT mounted"); 
+                            dmesgQueue.push_back ("[fileSystem] FAT mounted"); 
                         #endif
                     } else { 
                         Serial.printf ("[%10lu] [fileSystem] failed to mount FAT\n", millis ());
                         #ifdef __DMESG__
-                            dmesg ("[fileSystem] failed to mount FAT");
+                            dmesgQueue.push_back ("[fileSystem] failed to mount FAT");
                         #endif
                     }
                     return __builtinFlashDiskMounted__;
@@ -173,7 +171,7 @@
                             if (__fileSystem__.format ()) {
                                 Serial.printf ("[%10lu] [fileSystem] ... formatted\n", millis ());
                                 #ifdef __DMESG__
-                                    dmesg ("[fileSystem] formatted.");
+                                    dmesgQueue.push_back ("[fileSystem] formatted.");
                                 #endif
                                 if (__fileSystem__.begin (false)) {
                                     __builtinFlashDiskMounted__ = true;
@@ -181,7 +179,7 @@
                             } else {
                                 Serial.printf ("[%10lu] [fileSystem] ... formatting failed\n", millis ());
                                 #ifdef __DMESG__
-                                    dmesg ("[fileSystem] formatting failed.");
+                                    dmesgQueue.push_back ("[fileSystem] formatting failed.");
                                 #endif
                             }
                         }
@@ -190,12 +188,12 @@
                     if (__builtinFlashDiskMounted__) {
                         Serial.printf ("[%10lu] [fileSystem] LittleFS mounted\n", millis ());
                         #ifdef __DMESG__
-                            dmesg ("[fileSystem] LittleFS mounted"); 
+                            dmesgQueue.push_back ("[fileSystem] LittleFS mounted"); 
                         #endif
                     } else {
                         Serial.printf ("[%10lu] [fileSystem] failed to mount LittleFS\n", millis ());
                         #ifdef __DMESG__
-                            dmesg ("[fileSystem] failed to mount LittleFS");
+                            dmesgQueue.push_back ("[fileSystem] failed to mount LittleFS");
                         #endif
                     }
                     return __builtinFlashDiskMounted__;
@@ -214,7 +212,7 @@
                     if (!mountPoint || *mountPoint != '/' || strlen (mountPoint) >= sizeof (__SDcardMountPoint__) - 1) {
                         Serial.printf ("[%10lu] [fileSystem] invalid SD card mount point: %s\n", millis (), mountPoint);
                         #ifdef __DMESG__
-                            dmesg ("[fileSystem] invalid SD card mount point: ", mountPoint); 
+                            dmesgQueue.push_back ("[fileSystem] invalid SD card mount point: ", mountPoint); 
                         #endif
                         return false;
                     }
@@ -239,7 +237,7 @@
                             if (!isDirectory (mountPoint)) {
                                 Serial.printf ("[%10lu] [fileSystem] can't make the SD mount point directory: %s\n", millis (), mountPoint);
                                 #ifdef __DMESG__
-                                    dmesg ("[fileSystem] can't make the SD mount point directory: ", mountPoint); 
+                                    dmesgQueue.push_back ("[fileSystem] can't make the SD mount point directory: ", mountPoint); 
                                 #endif
                                 return false;
                             }
@@ -249,7 +247,7 @@
                     if (!SD.begin (pinCS)) {
                         Serial.printf ("[%10lu] [fileSystem] failed to mount SD card\n", millis ());
                         #ifdef __DMESG__
-                            dmesg ("[fileSystem] failed to mount SD card"); 
+                            dmesgQueue.push_back ("[fileSystem] failed to mount SD card"); 
                         #endif
                         return false;
                     }
@@ -257,7 +255,7 @@
                     if (SD.cardType () == CARD_NONE) {
                         Serial.printf ("[%10lu] [fileSystem] no SD card attached\n", millis ());
                         #ifdef __DMESG__
-                            dmesg ("[fileSystem] no SD card attached"); 
+                            dmesgQueue.push_back ("[fileSystem] no SD card attached"); 
                         #endif
                         return false;
                     }
@@ -266,7 +264,7 @@
 
                     Serial.printf ("[%10lu] [fileSystem] SD card mounted to %s\n", millis (), mountPoint);
                     #ifdef __DMESG__
-                        dmesg ("[fileSystem] SD card mounted to ", mountPoint); 
+                        dmesgQueue.push_back ("[fileSystem] SD card mounted to ", mountPoint); 
                     #endif
 
                     return true;
@@ -396,7 +394,7 @@
                     if (pointsToSDcard (fileName)) {
                         if (!SD.remove (SDcardPath (fileName))) {
                             #ifdef __DMESG__
-                                dmesg ("[fileSystem][SD] unable to delete ", fileName); 
+                                dmesgQueue.push_back ("[fileSystem][SD] unable to delete ", fileName); 
                             #endif
                             return false;
                         }
@@ -407,7 +405,7 @@
                 // builtin flash disk
                 if (!__fileSystem__.remove (fileName)) {
                     #ifdef __DMESG__
-                        dmesg ("[fileSystem] unable to delete ", fileName); 
+                        dmesgQueue.push_back ("[fileSystem] unable to delete ", fileName); 
                     #endif
                     return false;
                 }
@@ -422,7 +420,7 @@
                     if (pointsToSDcard (directory)) {
                         if (!SD.mkdir (SDcardPath (directory))) {
                             #ifdef __DMESG__
-                                dmesg ("[fileSystem][SD] unable to make ", directory); 
+                                dmesgQueue.push_back ("[fileSystem][SD] unable to make ", directory); 
                             #endif
                             return false;
                         }
@@ -433,7 +431,7 @@
                 // builtin flash disk
                 if (!__fileSystem__.mkdir (directory)) {
                     #ifdef __DMESG__
-                        dmesg ("[fileSystem] unable to make ", directory);
+                        dmesgQueue.push_back ("[fileSystem] unable to make ", directory);
                     #endif
                     return false;
                 }
@@ -449,14 +447,14 @@
                         // is it a SD card mount point?
                         if (strlen (directory) == strlen (__SDcardMountPoint__) - 1) {
                             #ifdef __DMESG__
-                                dmesg ("[fileSystem][SD] can not remove SC card mount point ", directory); 
+                                dmesgQueue.push_back ("[fileSystem][SD] can not remove SC card mount point ", directory); 
                             #endif
                             return false;
                         }
 
                         if (!SD.rmdir (SDcardPath (directory))) {
                             #ifdef __DMESG__
-                                dmesg ("[fileSystem][SD] unable to remove ", directory); 
+                                dmesgQueue.push_back ("[fileSystem][SD] unable to remove ", directory); 
                             #endif
                             return false;
                         }
@@ -467,7 +465,7 @@
                 // builtin flash disk
                 if (!__fileSystem__.rmdir (directory)) {
                     #ifdef __DMESG__
-                        dmesg ("[fileSystem] unable to remove ", directory);
+                        dmesgQueue.push_back ("[fileSystem] unable to remove ", directory);
                     #endif
                     return false;
                 }
@@ -483,14 +481,14 @@
                         if (pointsToSDcard (pathTo)) {
                             if (!SD.rename (SDcardPath (pathFrom), SDcardPath (pathTo))) {
                                 #ifdef __DMESG__
-                                    dmesg ("[fileSystem][SD] unable to rename ", pathFrom);
+                                    dmesgQueue.push_back ("[fileSystem][SD] unable to rename ", pathFrom);
                                 #endif
                                 return false;
                             }
                             return true;
                         } else {
                             #ifdef __DMESG__
-                                dmesg ("[fileSystem][SD] can't mix builtin flash disk and SD card with rename");
+                                dmesgQueue.push_back ("[fileSystem][SD] can't mix builtin flash disk and SD card with rename");
                             #endif
                             return false;
                         }
@@ -500,7 +498,7 @@
                 // both paths point to builtin flash disk
                 if (!__fileSystem__.rename (pathFrom, pathTo)) {
                     #ifdef __DMESG__
-                        dmesg ("[fileSystem] unable to rename ", pathFrom); 
+                        dmesgQueue.push_back ("[fileSystem] unable to rename ", pathFrom); 
                     #endif
                     return false;
                 }
@@ -509,20 +507,20 @@
 
             // makes the full path out of relative path and working directory, for example if working directory is /usr and relative patj is a.txt then full path is /usr/a.txt
 
-            string makeFullPath (const char *relativePath, const char *workingDirectory) { 
+            fsstring makeFullPath (const char *relativePath, const char *workingDirectory) { 
                 char *p = relativePath [0] ? (char *) relativePath : (char *) "/"; // relativePath should never be empty
 
-                string s;
+                fsstring s;
                 if (p [0] == '/') { // if path begins with / then it is already supposed to be fullPath
                     s = p; 
                 } else if (!strcmp (p, ".")) { // . means the working directory
                     s = workingDirectory;
                 } else if (p [0] == '.' && p [1] == '/') { // if path begins with ./ then fullPath = workingDirectory + the rest of paht
-                    s = string (workingDirectory);
+                    s = workingDirectory;
                     if (s [s.length () - 1] != '/') s += '/'; 
                     s += (p + 2); 
                 } else { // else fullPath = workingDirectory + path
-                    s = string (workingDirectory);
+                    s = workingDirectory;
                     if (s [s.length () - 1] != '/') s += '/'; 
                     s += p; 
                 }
@@ -572,8 +570,8 @@
 
             // returns information about file or directory in UNIX like text line
 
-            string fileInformation (const char *fileOrDirectory, bool showFullPath = false) { // returns UNIX like text with file information
-                string s;
+            fsstring fileInformation (const char *fileOrDirectory, bool showFullPath = false) { // returns UNIX like text with file information
+                fsstring s;
                 File f = open (fileOrDirectory, "r", false);
                 if (f) { 
                     unsigned long fSize = 0;
