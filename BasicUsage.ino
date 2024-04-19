@@ -7,7 +7,9 @@ keyValueDatabase<int, String> kvdbA;  // database instance where keys are intege
 
 void setup () {
     Serial.begin (115200);
-    while (!Serial) delay (10);
+    while (!Serial) 
+        delay (10);
+    delay (1000);
 
 
     // fileSystem.format ()
