@@ -1,5 +1,5 @@
 /*
- * Map.hpp for Arduino (ESP boards)
+ * Map.hpp for Arduino
  * 
  * This file is part of C++ std package for Arduino: https://github.com/BojanJurca/console-string-vector-map-for-Arduino
  * 
@@ -7,7 +7,7 @@
  *
  * Map functions are not thread-safe.
  * 
- * Bojan Jurca, April 27, 2024
+ * Bojan Jurca, April 18, 2024
  *  
  */
 
@@ -19,8 +19,6 @@
 
     #define __MAP_MAX_STACK_SIZE__ 32 // statically allocated stack needed for iterating through elements, 24 should be enough for the number of elemetns that fit into ESP32's memory
 
-    // #define __USE_PSRAM_FOR_MAPS__ // uncomment this line if you want Map to use PSRAM instead of heap (if PSRAM is available, of course)
-
     // #define __USE_MAP_EXCEPTIONS__   // uncomment this line if you want Map to throw exceptions
 
 
@@ -30,6 +28,14 @@
     #define NOT_FOUND       ((signed char) 0b10000100)  // -124 - key is not found
     #define NOT_UNIQUE      ((signed char) 0b10001000)  // -120 - key is not unique
     #define CANT_DO_IT_NOW  ((signed char) 0b11000000)  //  -64 - not the right time to do the operation, like triing to change data while iterating
+
+
+    // type of memory used
+    #define HEAP_MEM 2
+    #define PSRAM_MEM 3
+    #ifndef MAP_MEMORY_TYPE 
+        #define MAP_MEMORY_TYPE HEAP_MEM // use heap by default
+    #endif
 
 
     template <class keyType, class valueType> class Map {
@@ -72,14 +78,14 @@
 
                     if (std::is_same<keyType, String>::value)   // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
                         if (!i.key) {                           // ... check if parameter construction is valid
-                            log_e ("BAD_ALLOC");
+                            // log_e ("BAD_ALLOC");
                             __errorFlags__ = BAD_ALLOC;         // report error if it is not
                             return;
                         }
 
                     if (std::is_same<valueType, String>::value) // if value is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
                         if (!i.value) {                         // ... check if parameter construction is valid
-                            log_e ("BAD_ALLOC");
+                            // log_e ("BAD_ALLOC");
                             __errorFlags__ = BAD_ALLOC;         // report error if it is not
                             return;
                         }
@@ -98,7 +104,7 @@
             
             ~Map () { __clear__ (&__root__); } // release memory occupied by balanced binary search tree
 
-            
+
            /*
             *  Returns the number of pairs.
             */
@@ -165,7 +171,7 @@
 
                     if (std::is_same<keyType, String>::value)     // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
                         if (!e->key) {                            // ... check if parameter construction is valid
-                            log_e ("BAD_ALLOC");
+                            // log_e ("BAD_ALLOC");
                             #ifdef __USE_MAP_EXCEPTIONS__
                                 throw BAD_ALLOC;
                             #endif
@@ -175,7 +181,7 @@
 
                     if (std::is_same<valueType, String>::value)   // if value is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
                         if (!e->value) {                          // ... check if parameter construction is valid
-                            log_e ("BAD_ALLOC");
+                            // log_e ("BAD_ALLOC");
                             #ifdef __USE_MAP_EXCEPTIONS__
                                 throw BAD_ALLOC;
                             #endif
@@ -207,7 +213,7 @@
 
                 if (std::is_same<keyType, String>::value)   // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
                     if (!(String *) &key) {                 // ... check if parameter construction is valid
-                        log_e ("BAD_ALLOC");
+                        // log_e ("BAD_ALLOC");
                         #ifdef __USE_MAP_EXCEPTIONS__
                             throw BAD_ALLOC;
                         #endif
@@ -236,7 +242,7 @@
 
                 if (std::is_same<keyType, String>::value)   // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
                     if (!(String *) &key) {                 // ... check if parameter construction is valid
-                        log_e ("BAD_ALLOC");
+                        // log_e ("BAD_ALLOC");
                         #ifdef __USE_MAP_EXCEPTIONS__
                             throw BAD_ALLOC;
                         #endif
@@ -274,7 +280,7 @@
 
                 if (std::is_same<keyType, String>::value)   // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
                     if (!(String *) &key) {                 // ... check if parameter construction is valid
-                        log_e ("BAD_ALLOC");
+                        // log_e ("BAD_ALLOC");
                         #ifdef __USE_MAP_EXCEPTIONS__
                             throw BAD_ALLOC;
                         #endif
@@ -300,7 +306,7 @@
 
                 if (std::is_same<keyType, String>::value)   // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
                     if (!pair.key) {                        // ... check if parameter construction is valid
-                        log_e ("BAD_ALLOC");
+                        // log_e ("BAD_ALLOC");
                         #ifdef __USE_MAP_EXCEPTIONS__
                             throw BAD_ALLOC;
                         #endif
@@ -310,7 +316,7 @@
 
                 if (std::is_same<valueType, String>::value) // if value is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
                     if (!pair.value) {                      // ... check if parameter construction is valid
-                        log_e ("BAD_ALLOC");
+                        // log_e ("BAD_ALLOC");
                         #ifdef __USE_MAP_EXCEPTIONS__
                             throw BAD_ALLOC;
                         #endif
@@ -331,7 +337,7 @@
 
                 if (std::is_same<keyType, String>::value)   // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
                     if (!key) {                             // ... check if parameter construction is valid
-                        log_e ("BAD_ALLOC");
+                        // log_e ("BAD_ALLOC");
                         #ifdef __USE_MAP_EXCEPTIONS__
                             throw BAD_ALLOC;
                         #endif
@@ -341,7 +347,7 @@
 
                 if (std::is_same<valueType, String>::value) // if value is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
                     if (!(String *) &value) {               // ... check if parameter construction is valid
-                        log_e ("BAD_ALLOC");
+                        // log_e ("BAD_ALLOC");
                         #ifdef __USE_MAP_EXCEPTIONS__
                             throw BAD_ALLOC;
                         #endif
@@ -534,24 +540,17 @@
             signed char __insert__ (__balancedBinarySearchTreeNode__ **p, keyType& key, valueType& value, __balancedBinarySearchTreeNode__ **pInserted) { // returns the height of balanced binary search tree or error
                 // 1. case: a leaf has been reached - add new node here
                 if ((*p) == NULL) {
-                    log_i ("a leaf has been reached - add new node here");
+                    // log_i ("a leaf has been reached - add new node here");
                   
                     // different ways of allocation the memory for a new node
-                    #ifdef __USE_PSRAM_FOR_MAPS__
+                    #if MAP_MEMORY_TYPE == PSRAM_MEM
                         __balancedBinarySearchTreeNode__ *n = new (ps_malloc (sizeof (__balancedBinarySearchTreeNode__))) __balancedBinarySearchTreeNode__;
-                        #ifdef __USE_MAP_EXCEPTIONS__
-                            if (!__balancedBinarySearchTreeNode__) throw BAD_ALLOC;
-                        #endif
                     #else
-                        #ifdef __USE_MAP_EXCEPTIONS__
-                            __balancedBinarySearchTreeNode__ *n = new __balancedBinarySearchTreeNode__;
-                        #else
-                            __balancedBinarySearchTreeNode__ *n = new (std::nothrow) __balancedBinarySearchTreeNode__;    
-                        #endif
+                        __balancedBinarySearchTreeNode__ *n = new (malloc (sizeof (__balancedBinarySearchTreeNode__))) __balancedBinarySearchTreeNode__;                    
                     #endif
 
                     if (n == NULL) {
-                        log_e ("BAD_ALLOC");
+                        // log_e ("BAD_ALLOC");
                         #ifdef __USE_MAP_EXCEPTIONS__
                             throw BAD_ALLOC;
                         #endif
@@ -577,7 +576,7 @@
                 
                 // 2. case: add a new node to the left subtree of the current node
                 if (key < (*p)->pair.key) {
-                    log_i ("add a new node to the left subtree");
+                    // log_i ("add a new node to the left subtree");
 
                     int h = __insert__ (&((*p)->leftSubtree), key, value, pInserted);
                     if (h < 0) return h; // < 0 means an error
@@ -620,7 +619,7 @@
     
                 // 3. case: the node with the same values already exists 
                 if (!((*p)->pair.key < key)) { // meaning at this point that key == (*p)->pair.key
-                    log_e ("NOT_UNIQUE");
+                    // log_e ("NOT_UNIQUE");
                     #ifdef __USE_MAP_EXCEPTIONS__
                         throw NOT_UNIQUE;
                     #endif
@@ -629,7 +628,7 @@
                 }
         
                 // 4. case: add a new node to the right subtree of the current node
-                log_i ("add a new node to the right subtree");
+                // log_i ("add a new node to the right subtree");
 
                 int h = __insert__ (&((*p)->rightSubtree), key, value, pInserted);
                 if (h < 0) return h; // < 0 means an error
@@ -680,7 +679,7 @@
             signed char __erase__ (__balancedBinarySearchTreeNode__ **p, keyType& key) { // returns the height of balanced binary search tree or error
                 // 1. case: a leaf has been reached - key was not found
                 if ((*p) == NULL) {
-                    log_e ("NOT_FOUND");
+                    // log_e ("NOT_FOUND");
                     #ifdef __USE_MAP_EXCEPTIONS__
                         throw NOT_FOUND;
                     #endif                    
