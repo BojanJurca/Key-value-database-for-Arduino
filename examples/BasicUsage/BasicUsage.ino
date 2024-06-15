@@ -47,9 +47,9 @@ void setup () {
     uint32_t blockOffset; // not needed for searching for a key, but will coma handy later when searching for a value
     e = kvdbA.FindBlockOffset (8, blockOffset);
     switch (e) {
-        case OK:        Serial.printf ("kvdbA key 8 FOUND\n"); 
+        case err_ok:        Serial.printf ("kvdbA key 8 FOUND\n"); 
                         break;
-        case NOT_FOUND: Serial.printf ("kvdbA key NOT_FOUND\n"); 
+        case err_not_found: Serial.printf ("kvdbA key err_not_found\n"); 
                         break;
         default:        Serial.printf ("kvdbA FindBlockOffset error: %i\n", e); 
                         break;
@@ -59,9 +59,9 @@ void setup () {
     String value;
     e = kvdbA.FindValue (8, &value); 
     switch (e) {
-        case OK:        Serial.printf ("kvdbA value for a key 8 FOUND: %s\n", (char *) value.c_str ()); 
+        case err_ok:        Serial.printf ("kvdbA value for a key 8 FOUND: %s\n", (char *) value.c_str ()); 
                         break;
-        case NOT_FOUND: Serial.printf ("kvdbA key NOT_FOUND\n"); 
+        case err_not_found: Serial.printf ("kvdbA key err_not_found\n"); 
                         break;
         default:        Serial.printf ("kvdbA FindValue error: %i\n", e); 
                         break;
@@ -85,7 +85,7 @@ void setup () {
     kvdbA.Lock ();
         String oldValue;
         e = kvdbA.FindValue (8, &oldValue); 
-        if (e == OK)
+        if (e == err_ok)
             e = kvdbA.Update (8, oldValue + "teen"); 
     kvdbA.Unlock ();
     if (e) // != OK
@@ -131,12 +131,12 @@ void setup () {
         } else {
             Serial.printf ("FindValue error while fetching a value from disk: ");
             switch (e) {
-                  case BAD_ALLOC:       Serial.printf ("BAD_ALLOC\n"); break;
-                  case NOT_FOUND:       Serial.printf ("NOT_FOUND\n"); break;
-                  case NOT_UNIQUE:      Serial.printf ("NOT_UNIQUE\n"); break;
-                  case DATA_CHANGED:    Serial.printf ("DATA_CHANGED\n"); break;
-                  case FILE_IO_ERROR:   Serial.printf ("FILE_IO_ERROR\n"); break;
-                  case CANT_DO_IT_NOW:  Serial.printf ("CANT_DO_IT_NOW\n"); break;
+                  case err_bad_alloc:       Serial.printf ("err_bad_alloc\n"); break;
+                  case err_not_found:       Serial.printf ("err_not_found\n"); break;
+                  case err_not_unique:      Serial.printf ("err_not_unique\n"); break;
+                  case err_data_changed:    Serial.printf ("err_data_changed\n"); break;
+                  case err_file_io:         Serial.printf ("err_file_io\n"); break;
+                  case err_cant_do_it_now:  Serial.printf ("err_cant_do_it_now\n"); break;
               }
         }
     }
@@ -150,12 +150,12 @@ void setup () {
     e = kvdbA.errorFlags ();
     if (e) { // != OK
         Serial.printf ("100 inserts error:\n");
-        if (e & BAD_ALLOC)      Serial.println ("BAD_ALLOC");
-        if (e & NOT_FOUND)      Serial.println ("NOT_FOUND");
-        if (e & NOT_UNIQUE)     Serial.println ("NOT_UNIQUE");
-        if (e & DATA_CHANGED)   Serial.println ("DATA_CHANGED");
-        if (e & FILE_IO_ERROR)  Serial.println ("FILE_IO_ERROR");
-        if (e & CANT_DO_IT_NOW) Serial.println ("CANT_DO_IT_NOW");
+        if (e & err_bad_alloc)      Serial.println ("err_bad_alloc");
+        if (e & err_not_found)      Serial.println ("err_not_found");
+        if (e & err_not_unique)     Serial.println ("err_not_unique");
+        if (e & err_data_changed)   Serial.println ("err_data_changed");
+        if (e & err_file_io)        Serial.println ("err_file_io");
+        if (e & err_cant_do_it_now) Serial.println ("err_cant_do_it_now");
     }
 
 
@@ -188,12 +188,12 @@ void setup () {
                 }
                 e = kvdbB.errorFlags ();
                 if (e) { // != OK
-                    if (e & BAD_ALLOC)      Serial.println ("BAD_ALLOC");
-                    if (e & NOT_FOUND)      Serial.println ("NOT_FOUND");
-                    if (e & NOT_UNIQUE)     Serial.println ("NOT_UNIQUE");
-                    if (e & DATA_CHANGED)   Serial.println ("DATA_CHANGED");
-                    if (e & FILE_IO_ERROR)  Serial.println ("FILE_IO_ERROR");
-                    if (e & CANT_DO_IT_NOW) Serial.println ("CANT_DO_IT_NOW");
+                    if (e & err_bad_alloc)      Serial.println ("err_bad_alloc");
+                    if (e & err_not_found)      Serial.println ("err_not_found");
+                    if (e & err_not_unique)     Serial.println ("err_not_unique");
+                    if (e & err_data_changed)   Serial.println ("err_data_changed");
+                    if (e & err_file_io)        Serial.println ("err_file_io");
+                    if (e & err_cant_do_it_now) Serial.println ("err_cant_do_it_now");
                 }
                 kvdbB.Truncate ();
                 unsigned long endMillis = millis ();
