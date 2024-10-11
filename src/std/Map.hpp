@@ -7,7 +7,7 @@
  *
  * Map functions are not thread-safe.
  * 
- * May 22, 2024, Bojan Jurca
+ * October 10, 2024, Bojan Jurca
  *  
  */
 
@@ -78,14 +78,14 @@
                     for (auto i: il) {
 
                         if (is_same<keyType, String>::value)   // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                            if (!i.key) {                           // ... check if parameter construction is valid
+                            if (!*(String *) &i.key) {                           // ... check if parameter construction is valid
                                 // log_e ("BAD_ALLOC");
                                 __errorFlags__ = err_bad_alloc;         // report error if it is not
                                 return;
                             }
 
                         if (is_same<valueType, String>::value) // if value is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                            if (!i.value) {                         // ... check if parameter construction is valid
+                            if (!*(String *) &i.value) {                         // ... check if parameter construction is valid
                                 // log_e ("BAD_ALLOC");
                                 __errorFlags__ = err_bad_alloc;         // report error if it is not
                                 return;
@@ -172,7 +172,7 @@
                 for (auto e: other) {
 
                     if (is_same<keyType, String>::value)     // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                        if (!e->key) {                            // ... check if parameter construction is valid
+                        if (!*(String *) &e->key) {                            // ... check if parameter construction is valid
                             // log_e ("BAD_ALLOC");
                             #ifdef __USE_MAP_EXCEPTIONS__
                                 throw err_bad_alloc;
@@ -182,7 +182,7 @@
                         }
 
                     if (is_same<valueType, String>::value)   // if value is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                        if (!e->value) {                          // ... check if parameter construction is valid
+                        if (!*(String *) &e->value) {                          // ... check if parameter construction is valid
                             // log_e ("BAD_ALLOC");
                             #ifdef __USE_MAP_EXCEPTIONS__
                                 throw err_bad_alloc;
@@ -214,7 +214,7 @@
             valueType *find (keyType key) {
 
                 if (is_same<keyType, String>::value)   // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                    if (!(String *) &key) {                 // ... check if parameter construction is valid
+                    if (!*(String *) &key) {                 // ... check if parameter construction is valid
                         // log_e ("BAD_ALLOC");
                         #ifdef __USE_MAP_EXCEPTIONS__
                             throw err_bad_alloc;
@@ -243,7 +243,7 @@
                 static valueType dummyValue2 = {};
 
                 if (is_same<keyType, String>::value)   // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                    if (!(String *) &key) {                 // ... check if parameter construction is valid
+                    if (!*(String *) &key) {                 // ... check if parameter construction is valid
                         // log_e ("BAD_ALLOC");
                         #ifdef __USE_MAP_EXCEPTIONS__
                             throw err_bad_alloc;
@@ -281,7 +281,7 @@
             signed char erase (keyType key) { 
 
                 if (is_same<keyType, String>::value)   // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                    if (!(String *) &key) {                 // ... check if parameter construction is valid
+                    if (!*(String *) &key) {                 // ... check if parameter construction is valid
                         // log_e ("BAD_ALLOC");
                         #ifdef __USE_MAP_EXCEPTIONS__
                             throw err_bad_alloc;
@@ -307,7 +307,7 @@
             signed char insert (Pair pair) { 
 
                 if (is_same<keyType, String>::value)   // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                    if (!pair.key) {                        // ... check if parameter construction is valid
+                    if (!*(String *) &pair.key) {                        // ... check if parameter construction is valid
                         // log_e ("BAD_ALLOC");
                         #ifdef __USE_MAP_EXCEPTIONS__
                             throw err_bad_alloc;
@@ -317,7 +317,7 @@
                     }
 
                 if (is_same<valueType, String>::value) // if value is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                    if (!pair.value) {                      // ... check if parameter construction is valid
+                    if (!*(String *) &pair.value) {                      // ... check if parameter construction is valid
                         // log_e ("BAD_ALLOC");
                         #ifdef __USE_MAP_EXCEPTIONS__
                             throw err_bad_alloc;
@@ -338,7 +338,7 @@
             signed char insert (keyType key, valueType value) { 
 
                 if (is_same<keyType, String>::value)   // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                    if (!key) {                             // ... check if parameter construction is valid
+                    if (!*(String *) &key) {                             // ... check if parameter construction is valid
                         // log_e ("BAD_ALLOC");
                         #ifdef __USE_MAP_EXCEPTIONS__
                             throw err_bad_alloc;
@@ -348,7 +348,7 @@
                     }
 
                 if (is_same<valueType, String>::value) // if value is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                    if (!(String *) &value) {               // ... check if parameter construction is valid
+                    if (!*(String *) &value) {               // ... check if parameter construction is valid
                         // log_e ("BAD_ALLOC");
                         #ifdef __USE_MAP_EXCEPTIONS__
                             throw err_bad_alloc;
@@ -571,10 +571,10 @@
 
                         // in case of Strings - it is possible that key and value didn't get constructed, so just swap stack memory with parameters - this always succeeds
                         if (is_same<keyType, String>::value)   // if key is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                            if (!n->pair.key)                       // ... check if parameter construction is valid
+                            if (!*(String *) &n->pair.key)                       // ... check if parameter construction is valid
                                 __swapStrings__ ((String *) &n->pair.key, (String *) &key); 
                         if (is_same<valueType, String>::value) // if value is of type String ... (if anyone knows hot to do this in compile-time a feedback is welcome)
-                            if (!n->pair.value)                     // ... check if parameter construction is valid
+                            if (!*(String *) &n->pair.value)                     // ... check if parameter construction is valid
                                 __swapStrings__ ((String *) &n->pair.value, (String *) &value);
 
                     *p = n;
