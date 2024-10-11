@@ -1,9 +1,15 @@
-#include <LittleFS.h> // or #include <FFat.h> or #include <SD.h>
+#include <WiFi.h>
 
+#include <LittleFS.h> // or #include <FFat.h> or #include <SD.h>
 #define fileSystem LittleFS // or FFat or SD
 
 #include "keyValuedatabase.hpp"
-keyValueDatabase<int, String> kvdbA;  // database instance where keys are integers and values are Strings (in this example)
+
+keyValueDatabase<String, String> settings;  // a key-value database instance where keys are Strings and values are Strings
+
+
+WiFiServer webServer (80);
+keyValueDatabase<String, unsigned int> hitCount;  // a key-value database instance where keys are Strings and values are unsigned ints
 
 
 void setup () {
@@ -17,193 +23,171 @@ void setup () {
     // if (fileSystem.format ()) Serial.println ("LittleFs formatted"); else Serial.println ("LittleFs formatting failed");
 
 
-    signed char e;
+    // ----- QUICK START EXAMPLE -----
 
-    // index values in the data file (load keys to balanced binary search tree)
-    e = kvdbA.loadData ("/A.db");
-    if (!e) //  OK
-        Serial.printf ("kvdbA initially loaded %i key-value pairs\n", kvdbA.size ());
-    else
-        Serial.printf ("kvdbA failed to load data, check errorFalgs () for details\n");
+    settings.Open ("/settings.db");
+    // settings.Truncate ();
 
+    #define defaultSSID "*****"
+    #define defaultPassword "*****"
 
-    // truncate (delete) all key-value pairs in case there are some already in kvdbA
-    kvdbA.Truncate ();
+    // read values that belong to given keys from database
+    String SSID = settings ["SSID"];
+    String password = settings ["password"];
 
+    if (SSID == "") {
+        Serial.println ("Initializing settings database with default WiFi credentials");
 
-    // Example of inserting new key-value pairs
-    e = kvdbA.Insert (7, "seven");
-    if (e) // != OK
-        Serial.printf ("kvdbA Insert failed, check errorFalgs () for details\n");
-    e = kvdbA.Insert (8, "eigth");
-    if (e) // != OK
-        Serial.printf ("kvdbA Insert failed, check errorFalgs () for details\n");
-    e = kvdbA.Insert (9, "nine");
-    if (e) // != OK
-        Serial.printf ("kvdbA Insert failed, check errorFalgs () for details\n");
-
-
-    // Examples of searching for a key
-    uint32_t blockOffset;
-    e = kvdbA.FindBlockOffset (8, blockOffset);
-    switch (e) {
-        case err_ok:        Serial.printf ("kvdbA key 8 FOUND\n"); 
-                        break;
-        case err_not_found: Serial.printf ("kvdbA key err_not_found\n"); 
-                        break;
-        default:        Serial.printf ("kvdbA FindBlockOffset error: %i\n", e); 
-                        break;
+        // write key-value pairs to database
+        settings ["SSID"] = SSID = defaultSSID;
+        settings ["password"] = password = defaultPassword;
+    } else {
+        Serial.println ("WiFi credentials read from settings database");
     }
 
-    // Examples of searching for a value that belongs to a given key
-    String value;
-    e = kvdbA.FindValue (8, &value); 
-    switch (e) {
-        case err_ok:        Serial.printf ("kvdbA value for a key 8 FOUND: %s\n", (char *) value.c_str ()); 
-                        break;
-        case err_not_found: Serial.printf ("kvdbA key err_not_found\n"); 
-                        break;
-        default:        Serial.printf ("kvdbA FindValue error: %i\n", e); 
-                        break;
-    }    
+    // check for error or success
+    signed char e = settings.errorFlags ();
+    if (e) { 
+        // check error details
+        if (e & err_bad_alloc)      Serial.println ("settings err_bad_alloc");
+        if (e & err_not_found)      Serial.println ("settings err_not_found");
+        if (e & err_not_unique)     Serial.println ("settings err_not_unique");
+        if (e & err_data_changed)   Serial.println ("settings err_data_changed");
+        if (e & err_file_io)        Serial.println ("settings err_file_io");
+        if (e & err_cant_do_it_now) Serial.println ("settings err_cant_do_it_now");
 
+        settings.clearErrorFlags ();
+    } else {
+        Serial.println ("settings OK");
+    }
 
-    // Example of deleting a key-value pair
-    e = kvdbA.Delete (7); 
-    if (e) // != OK
-        Serial.printf ("kvdbA Delete failed, check errorFalgs () for details\n");
-
-
-    // Examples of updating the value for a given key
-
-    // update (1) the value (most simple version of calling update)
-    e = kvdbA.Update (8, "eight"); 
-    if (e) // != OK
-        Serial.printf ("kvdbA Update failed, check errorFalgs () for details\n");
-
-    // update (2) the value with calculation (update with locking to prevent other tasks changind the data while the calculation is not finished)
-    kvdbA.Lock ();
-        String oldValue;
-        e = kvdbA.FindValue (8, &oldValue); 
-        if (e == err_ok)
-            e = kvdbA.Update (8, oldValue + "teen"); 
-    kvdbA.Unlock ();
-    if (e) // != OK
-        Serial.printf ("kvdbA Update failed, check errorFalgs () for details\n");
-
-    // update (3) the value with calculation using lambda callback function, the locking is already integrated so the calculation can be performed without problems
-    // this mechanism is usefull for example for counters (increasing the value), etc)
-    e = kvdbA.Update (9, [] (String& value) { value.toUpperCase (); } ); 
-    if (e) // != OK
-        Serial.printf ("kvdbA Update failed, check errorFalgs () for details\n");
-
-
-    // Example of iterating through all key-value pairs
-    for (auto p: kvdbA) {
-        // keys are always kept in memory and are obtained fast
-        Serial.print (p->key); Serial.print (", "); Serial.print (p->blockOffset); Serial.print (" -> "); 
-        
-        // values are read from disk, obtaining a value may be much slower
+    // list the whole database
+    for (auto p: settings) {
         String value;
-        e = kvdbA.FindValue (p->key, &value, p->blockOffset); // blockOffset is optional but since we already have it we can speed up the search a bit by providing it
-        if (e) // != OK 
-            Serial.printf ("FindValue error, check errorFalgs () for details\n");
-        else
-            Serial.println (value);
-    }
-
-
-    // Example of updating the values (with calculation) during iteration
-    // Please note that persistent key value pairs are already locked throughtout the iterator, so additional locking is not required.
-    for (auto p: kvdbA) {
-        e = kvdbA.Update (p->key, [] (String& value) { value = "»" + value + "«"; }, &(p->blockOffset)); // since block offset is already known it will speed up Update operation if we provide this information
-        if (e) 
-            Serial.printf ("Update error, check errorFalgs () for details\n");
-    }
-
-
-    // Detecting errors that occured in persistent key-value pairs operations
-    for (auto p: kvdbA) {
-        String value;
-        e = kvdbA.FindValue (p->key, &value, p->blockOffset);
+        e = settings.FindValue (p->key, &value, p->blockOffset);
         if (!e) { // OK
-            Serial.print (p->key); Serial.print (" - "); Serial.println (value);     
+            Serial.print (p->key); Serial.print (" - "); Serial.println (value);
         } else {
-            Serial.printf ("FindValue error while fetching a value from disk: ");
-            switch (e) {
-                  case err_bad_alloc:       Serial.printf ("err_bad_alloc\n"); break;
-                  case err_not_found:       Serial.printf ("err_not_found\n"); break;
-                  case err_not_unique:      Serial.printf ("err_not_unique\n"); break;
-                  case err_data_changed:    Serial.printf ("err_data_changed\n"); break;
-                  case err_file_io:         Serial.printf ("err_file_io\n"); break;
-                  case err_cant_do_it_now:  Serial.printf ("err_cant_do_it_now\n"); break;
-              }
+            // error ...
+            Serial.println ("Error " + String (e) + " fetching a value for " + p->key);
         }
     }
 
-
-    // checking errors only once for multiple operations
-    kvdbA.clearErrorFlags ();
-    for (int i = 1000; i < 1100; i++)
-        kvdbA.Insert (i, String (i));
-
-    e = kvdbA.errorFlags ();
-    if (e) { // != OK
-        Serial.printf ("100 inserts error:\n");
-        if (e & err_bad_alloc)      Serial.println ("err_bad_alloc");
-        if (e & err_not_found)      Serial.println ("err_not_found");
-        if (e & err_not_unique)     Serial.println ("err_not_unique");
-        if (e & err_data_changed)   Serial.println ("err_data_changed");
-        if (e & err_file_io)  Serial.println ("err_file_io");
-        if (e & err_cant_do_it_now) Serial.println ("err_cant_do_it_now");
+    // test
+    WiFi.begin (SSID, password);
+    while (WiFi.localIP ().toString () == "0.0.0.0") { // wait until we get IP from the router
+        delay (1000);
+        Serial.printf ("   .\n");
     }
 
-
-    // find first (last) keys
-    auto firstElement = first_element (kvdbA);
-    if (firstElement) // check if first element is found (if kvdbA is not empty)
-        Serial.printf ("first element (min key) of kvdbA = %i\n", (*firstElement)->key);
-
-    auto lastElement = last_element (kvdbA);
-    if (lastElement) // check if last element is found (if kvdbA is not empty)
-        Serial.printf ("last element (max key) of kvdbA = %i\n", (*lastElement)->key);
+    Serial.printf ("Got IP: %s\n", (char *) WiFi.localIP ().toString ().c_str ());
 
 
-                // capacity and speed test
-                keyValueDatabase<unsigned long, String> kvdbB;
-                kvdbB.loadData ("/B.db");
-                if (kvdbB.errorFlags ()) // != OK 
-                    Serial.printf ("kvdbB failed to load data: %i, all the data may not be indexed\n", kvdbB.errorFlags ());
-                else
-                    Serial.printf ("kvdbB initially loaded %i key-value pairs\n", kvdbB.size ());
-                kvdbB.Truncate ();
-                kvdbB.clearErrorFlags ();
-                unsigned long l;
-                unsigned long startMillis = millis ();
-                for (l = 1; l <= 100000; l++) {
-                    if (kvdbB.Insert ( l, "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum." ))
-                         break;
-                    if (l % 100 == 0)
-                        Serial.printf ("%lu ... %lu Bytes ...\n", kvdbB.size (), kvdbB.dataFileSize ());
-                }
-                e = kvdbB.errorFlags ();
-                if (e) { // != OK
-                    if (e & err_bad_alloc)      Serial.println ("err_bad_alloc");
-                    if (e & err_not_found)      Serial.println ("err_not_found");
-                    if (e & err_not_unique)     Serial.println ("err_not_unique");
-                    if (e & err_data_changed)   Serial.println ("err_data_changed");
-                    if (e & err_file_io)  Serial.println ("err_file_io");
-                    if (e & err_cant_do_it_now) Serial.println ("err_cant_do_it_now");
-                }
-                kvdbB.Truncate ();
-                unsigned long endMillis = millis ();
+    // ----- A LITTLE LONGER START EXAMPLE -----
 
-                Serial.printf ("Maximum number of keyValueDatabase<unsigned long, (long String text) )> in the memory or data file (whichever error occured) is %lu\n", l); 
-                // ESP32-S2: 63951 for short string (running out of memory) or 2600 for long string (running out of disk)
-                Serial.printf ("Average Insert time = %lu ms\n", (endMillis - startMillis) / l);
-                // ESP32-S2: 64 ms
+    webServer.begin ();
+
+    hitCount.Open ("/hitCount.db");
+    // hitCount.Truncate ();
+
+
+    // Insert: there are 2 possible ways to insert a new record.
+    //         1. the simple one is using [] operator like
+    //              ["GET / HTTP/1.1"] = 0;
+    //
+    //         2. the second one is using Insert function: 
+                    e = hitCount.Insert ("GET / HTTP/1.1", 0);
+                    if (e) // != OK
+                        Serial.println ("hitCount Insert failed with error " + String (e));
+
+    /* Delete: can be used in a similar way:
+                    e = hitCount.Delete ("GET / HTTP/1.1");
+                    if (e) // != OK
+                        Serial.println ("hitCount Delete failed with error " + String (e));
+    */
+
+    // Find: there are 2 possible ways to find a value in a database.
+    //       1. the simple one is using [] operator like
+    //          unsigned int rootCount = hitCount ["GET / HTTP/1.1"];
+    //
+    //       2. the second is using FindValue function
+                    unsigned int rootCount;
+                    e = hitCount.FindValue ("GET / HTTP/1.1", &rootCount);
+                    switch (e) {
+                        case err_ok:        Serial.printf ("GET / HTTP/1.1 has been accessed %u times so far\n", rootCount);
+                                            break;
+                        case err_not_found: Serial.printf ("GET / HTTP/1.1 not found in hitCount\n");
+                                            break;
+                        default:            Serial.printf ("FindValue resulted in error %i\n", e);
+                                            break;
+                    }
+
+    // Update the whole database - not that it would make much sense right here ... please note that iterating is thread-safe since the key-value database is locked meanwhile
+    for (auto p: hitCount) {
+      /* set the counters to specific value:
+        e = hitCount.Update (p->key, 0, &p->blockOffset);
+        if (e) // error
+            Serial.println ("Error " + String (e) + " updating a value for " + p->key);
+      */
+      // calculate new counter value from existing one with the help of lambda callback function
+      e = hitCount.Update (p->key, [] (unsigned int& value) { value ++; }, &p->blockOffset);
+        if (e) // error
+            Serial.println ("Error " + String (e) + " updating a value for " + p->key);
+    }
+
 }
 
-void loop () {
+unsigned int hits;
 
+void loop () {
+    WiFiClient webClient = webServer.accept ();
+    if (webClient) {
+        String httpRequest = "";
+        while (webClient.connected ()) {
+            if (webClient.available ()) {
+                char c = webClient.read ();
+                if (c == '\n' || c == '\r') { // read the HTTP request only until the first \n and discard the rest (although this information may be useful)
+                    Serial.println ("Beginning of HTTP request from " + webClient.remoteIP ().toString () + ":\r\n" + httpRequest); 
+
+                    // Update/Upsert: there are 4 possible ways to update/upsert a value in a database.
+                    //       1. the straightforward one is using expression with [] operators like
+                    //
+                    //            hitCount [httpRequest] = hits = hitCount [httpRequest] + 1;
+                    //
+                    //       Although this works in a single-threaded environment, it is not thread-safe. 
+                    //
+                    //       2. to use expressions in a multi-threaded environment the tatabase should be locked during expression calculation:
+                    //
+                    //            hitCount.Lock ();
+                    //            hitCount [httpRequest] = hits = hitCount [httpRequest] + 1;
+                    //            hitCount.Unlock ();
+                    //
+                    //      3. the third option is using ++ operator together with [] operator, which is thread-safe:
+                    //
+                                  hits = ++ hitCount [httpRequest];
+                    //
+                    //      The following operators are all thread safe: prefix and postfix ++ and --, +=, -=, *=, /=
+                    //
+                    //      4. the fourth option is using (lambda) callback function, which is the fastest and also thread safe.
+                    //
+                    //            signed char e = hitCount.Upsert (httpRequest, [] (unsigned int& value) { hits = ++ value; } ); 
+                    //            if (e) // error
+                    //                ...
+
+                    String httpReplyBody = "<HTML><BODY>This page has been accessed " + String (hits) + " times</BODY></HTML>"; // always send a similar reply
+                    Serial.println ("Body of HTTP reply:\r\n" + httpReplyBody);
+                    webClient.print ("HTTP/1.1 200 OK\r\n"
+                                    "Content-type: text/html\r\n"
+                                    "Connection: close\r\n"
+                                    "Content-Length: " + String (httpReplyBody.length ()) + "\r\n"
+                                    "\r\n" +
+                                    httpReplyBody);
+                    webClient.stop ();
+                    return;
+                }
+                // else keep reading the httpRequest
+                httpRequest += c;
+            }
+        }
+    }
 }
