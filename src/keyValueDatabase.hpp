@@ -76,6 +76,13 @@
     #define err_data_changed    ((signed char) 0b10010000) // -112 - unexpected data value found
     #define err_file_io         ((signed char) 0b10100000) //  -96 - file operation error
     #define err_cant_do_it_now  ((signed char) 0b11000000) //  -64 - for example changing the data while iterating or loading the data if already loaded
+    // the other error codes #defined in Map.hpp and vector.hpp
+    // #define err_ok              ((signed char) 0b00000000)  //    0 - no error
+    // #define err_not_unique      ((signed char) 0b10001000)  // -120 - key is not unique
+    // #define err_not_found       ((signed char) 0b10000100)  // -124 - key is not found
+    // #define err_out_of_range    ((signed char) 0b10000010)  // -126 - invalid index      
+    // #define err_bad_alloc       ((signed char) 0b10000001)  // -127 - out of memory
+
 
     #ifdef SEMAPHORE_H // RTOS is running beneath Arduino sketch, multitasking (and semaphores) is supported
         static SemaphoreHandle_t __keyValueDatabaseSemaphore__ = xSemaphoreCreateMutex (); 
@@ -273,6 +280,7 @@
                     #endif
                     __errorFlags__ |= err_cant_do_it_now;
                     Unlock (); 
+                    // DEBUG: Serial.print ("   Insert ("); Serial.print (key); Serial.print (", "); Serial.print (value); Serial.println (" can't Insert while iterating");
                     return err_cant_do_it_now;
                 }
 
@@ -436,7 +444,7 @@
                 if (freeBlockIndex == -1) { // data appended to the end of __dataFile__
                     __dataFileSize__ += blockSize;       
                 } else { // data written to free block in __dataFile__
-                    __freeBlocksList__.erase (freeBlockIndex); // doesn't fail
+                    __freeBlocksList__.erase (__freeBlocksList__.begin () + freeBlockIndex); // doesn't fail
                 }
                 
                 // log_i ("OK");
@@ -463,9 +471,9 @@
 
                 Lock ();
                 Map<keyType, uint32_t>::clearErrorFlags ();
-                uint32_t *p = Map<keyType, uint32_t>::find (key);
-                if (p) { // if found
-                    blockOffset = *p;
+                auto p = Map<keyType, uint32_t>::find (key);
+                if (p != Map<keyType, uint32_t>::end ()) { // if found
+                    blockOffset = p->second;
                     Unlock ();  
                     // log_i ("OK");
                     return err_ok;
@@ -515,8 +523,8 @@
 
                 if (blockOffset == 0xFFFFFFFF) { // if block offset was not specified find it from Map
                     Map<keyType, uint32_t>::clearErrorFlags ();
-                    uint32_t *pBlockOffset = Map<keyType, uint32_t>::find (key);
-                    if (!pBlockOffset) { // if not found or error
+                    auto p = Map<keyType, uint32_t>::find (key); 
+                    if (p == Map<keyType, uint32_t>::end ()) { // if not found or error
                         signed char e = Map<keyType, uint32_t>::errorFlags ();
                         if (e) { // error
                             __errorFlags__ |= e;
@@ -528,7 +536,7 @@
                             return err_not_found;
                         }
                     }
-                    blockOffset = *pBlockOffset;
+                    blockOffset = p->second;
                 }
 
                 int16_t blockSize;
@@ -600,8 +608,8 @@
       
                     // log_i ("step 1: looking for block offset in Map");
                     Map<keyType, uint32_t>::clearErrorFlags ();
-                    pBlockOffset = Map<keyType, uint32_t>::find (key);
-                    if (!pBlockOffset) { // if not found
+                    auto p = Map<keyType, uint32_t>::find (key);
+                    if (p == Map<keyType, uint32_t>::end ()) { // if not found
                         signed char e = Map<keyType, uint32_t>::errorFlags ();
                         if (e) { // error
                             __errorFlags__ |= e;
@@ -613,6 +621,7 @@
                             return err_not_found;
                         }
                     }
+                    pBlockOffset = &(p->second);
                 } else {
                     // log_i ("step 1: block offset already profided by the calling program");
                 }
@@ -663,7 +672,7 @@
                         throw err_bad_alloc;
                     #endif
                     __errorFlags__ |= err_bad_alloc;
-                    Unlock (); 
+                    Unlock ();
                     return err_bad_alloc;
                 }
 
@@ -789,7 +798,7 @@
                         // log_i ("step 10: try to roll-back");
                         if (__dataFile__.seek (newBlockOffset, SeekSet)) {
                             newBlockSize = (int16_t) -newBlockSize;
-                            if (__dataFile__.write ((byte *) &newBlockSize, sizeof (newBlockSize)) != sizeof (newBlockSize)) { // can't roll-back     
+                            if (__dataFile__.write ((byte *) &newBlockSize, sizeof (newBlockSize)) != sizeof (newBlockSize)) { // can't roll-back         
                                 __dataFile__.close (); // memory key value pairs and disk data file are synchronized any more - it is better to clost he file, this would cause all disk related operations from now on to fail
                             }
                         } else { // can't roll-back 
@@ -812,7 +821,7 @@
                     if (freeBlockIndex == -1) { // data appended to the end of __dataFile__
                         __dataFileSize__ += newBlockSize;
                     } else { // data written to free block in __dataFile__
-                        __freeBlocksList__.erase (freeBlockIndex); // doesn't fail
+                        __freeBlocksList__.erase (__freeBlocksList__.begin () + freeBlockIndex); // doesn't fail
                     }
                     // mark old block as free
                     if (!__dataFile__.seek (*pBlockOffset, SeekSet)) {
@@ -943,10 +952,13 @@
                 Lock ();
                 signed char e;
                 e = Insert (key, newValue);
-                if (e) // != OK
-                    e = Update (key, newValue);
+                if (e == err_not_unique) {
+                    // DEBUG: Serial.print ("   Upsert ("); Serial.print (key); Serial.print (", "); Serial.print (newValue); Serial.print (" Insert error "); Serial.println (e);
+                    e = Update (key, newValue, NULL);
+                }
                 if (e) { // != OK
                     // log_e ("Update or Insert error");
+                    // DEBUG: Serial.print ("   Upsert ("); Serial.print (key); Serial.print (", "); Serial.print (newValue); Serial.print (" Update error "); Serial.println (e);
                     __errorFlags__ |= e;
                 } else {
                     // log_i ("OK");
@@ -1043,7 +1055,7 @@
                                         upsertCallback (value);
                                         e = Insert (key, value);
                                         break;
-                    default:            // error
+                    default:            // errror
                                         __errorFlags__ |= e;
                                         Unlock ();  
                                         return e;
@@ -1239,7 +1251,11 @@
                     // conversion operator to support reading
                     operator valueType () const {                
                         valueType value = {};
-                        __parent__->FindValue (__key__, &value);
+                        signed char e = __parent__->FindValue (__key__, &value);
+                        if (e == err_not_found) // flag err_not_found
+                            __parent__->__errorFlags__ |= err_not_found;
+                        // DEBUG: Serial.print ("   find ["); Serial.print (__key__); Serial.print ("] = "); Serial.println (value);
+
                         return value;
                     }
 
@@ -1255,6 +1271,7 @@
                                 __parent__->__errorFlags__ |= err_bad_alloc;
                                 return *this;
                             }
+                            // DEBUG: Serial.print ("   assign ["); Serial.print (__key__); Serial.print ("] = "); Serial.println (value);
 
                         __parent__->Upsert (__key__, value);
                         return *this;
@@ -1432,32 +1449,27 @@
             */
 
             struct keyBlockOffsetPair {
-                keyType key;          // node key
-                uint32_t blockOffset; // __dataFile__ offset of block containing a key-value pair
+                keyType key;          // key
+                uint32_t blockOffset; // __dataFile__ offset of block containing both: key-value pair
             };        
 
-            class Iterator : public Map<keyType, uint32_t>::Iterator {
+            class iterator : public Map<keyType, uint32_t>::iterator {
                 public:
             
-                    // called form begin () and first_element () - since only the begin () instance is used for iterating we'll do the locking here ...
-                    Iterator (keyValueDatabase* pkvp, int8_t stackSize) : Map<keyType, uint32_t>::Iterator (pkvp, stackSize) {
+                    // there are 2 cases when constructor gets called: begin (pointToFirstPair = true) and end (pointToFirstPair = false) 
+                    iterator (keyValueDatabase* pkvp, bool pointToFirstPair) : Map<keyType, uint32_t>::iterator (pkvp, pointToFirstPair) {
                         __pkvp__ = pkvp;
                     }
 
-                    // caled form end () andl last_element () 
-                    Iterator (int8_t stackSize, keyValueDatabase* pkvp) : Map<keyType, uint32_t>::Iterator (stackSize, pkvp) {
-                        __pkvp__ = pkvp;
-                    }
-
-                    ~Iterator () {
+                    ~iterator () {
                         if (__pkvp__) {
                             __pkvp__->__inIteration__ --;
+                            // DEBUG: Serial.print ("   stopped itetating, count = "); Serial.println (__pkvp__->__inIteration__);
                             __pkvp__->Unlock (); 
                         }
                     }
 
-                    // keyBlockOffsetPair& operator * () const { return (keyBlockOffsetPair&) Map<keyType, uint32_t>::Iterator::operator *(); }
-                    keyBlockOffsetPair * operator * () const { return (keyBlockOffsetPair *) Map<keyType, uint32_t>::Iterator::operator *(); }
+                    keyBlockOffsetPair& operator * () { return (keyBlockOffsetPair&) Map<keyType, uint32_t>::iterator::operator *(); }
 
                     // this will tell if iterator is valid (if there are not elements the iterator can not be valid)
                     operator bool () const { return __pkvp__->size () > 0; }
@@ -1469,14 +1481,18 @@
 
             };
 
-            Iterator begin () { // since only the begin () instance is neede for iteration we'll do the locking here
+            iterator begin () { // since only the begin () instance is neede for iteration we'll do the locking here
                 Lock (); // Unlock () will be called in instance destructor
                 __inIteration__ ++; // -- will be called in instance destructor
-                return Iterator (this, this->height ()); 
+                // DEBUG: Serial.print ("   startted itetating (begin), count = "); Serial.println (__inIteration__);
+                return iterator (this, true); 
             } 
 
-            Iterator end () { 
-                return Iterator ((int8_t) 0, (keyValueDatabase *) NULL); 
+            iterator end () { 
+                Lock (); // Unlock () will be called in instance destructor
+                __inIteration__ ++; // -- will be called in instance destructor
+                // DEBUG: Serial.print ("   startted itetating (end), count = "); Serial.println (__inIteration__);
+                return iterator (this, false); 
             } 
 
 
@@ -1490,16 +1506,16 @@
             *        Serial.printf ("first element (min key) of pkvpA = %i\n", (*firstElement)->key);
             */
 
-          Iterator first_element () { 
+          iterator first_element () { 
               Lock (); // Unlock () will be called in instance destructor
               __inIteration__ ++; // -- will be called in instance destructor
-              return Iterator (this, this->height ());  // call the 'begin' constructor
+              return iterator (this, this->height ());  // call the 'begin' constructor
           }
 
-          Iterator last_element () {
+          iterator last_element () {
               Lock (); // Unlock () will be called in instance destructor
               __inIteration__ ++; // -- will be called in instance destructor
-              return Iterator (this->height (), this);  // call the 'end' constructor
+              return iterator (this->height (), this);  // call the 'end' constructor
           }
 
 
@@ -1643,10 +1659,10 @@
         #define __FIRST_LAST_ELEMENT__
 
         template <typename T>
-        typename T::Iterator first_element (T& obj) { return obj.first_element (); }
+        typename T::iterator first_element (T& obj) { return obj.first_element (); }
 
         template <typename T>
-        typename T::Iterator last_element (T& obj) { return obj.last_element (); }
+        typename T::iterator last_element (T& obj) { return obj.last_element (); }
 
     #endif
 
